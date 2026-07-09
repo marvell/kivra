@@ -14,6 +14,19 @@ final class ShiftTapClassifierTests: XCTestCase {
         )
     }
 
+    func testAlternatingShiftEventsSelectSource() {
+        var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
+
+        let firstIsDown = !classifier.isPressed(.left)
+        XCTAssertEqual(classifier.shiftChanged(side: .left, isDown: firstIsDown, timestamp: 0), .none)
+
+        let secondIsDown = !classifier.isPressed(.left)
+        XCTAssertEqual(
+            classifier.shiftChanged(side: .left, isDown: secondIsDown, timestamp: 100 * millisecond),
+            .select(.left)
+        )
+    }
+
     func testLongTapDoesNotSelectSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 

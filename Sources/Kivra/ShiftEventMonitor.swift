@@ -146,7 +146,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
             classifier.otherKeyChanged()
         case .flagsChanged:
             if let side = ShiftSide.allCases.first(where: { $0.keyCode == keyCode }) {
-                let isDown = CGEventSource.keyState(.combinedSessionState, key: side.keyCode)
+                let isDown = !classifier.isPressed(side)
                 if case let .select(selectedSide) = classifier.shiftChanged(
                     side: side,
                     isDown: isDown,
