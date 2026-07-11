@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set release version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+(\.[0-9]+){2}(-[0-9A-Za-z.-]+)?$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: Import Developer ID certificate
+        id: signing
+        run: |
+          keychain="$RUNNER_TEMP/app-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          certificate="$RUNNER_TEMP/certificate.p12"
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 -D > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          security list-keychain -d user -s "$keychain"
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F '\"' '/Developer ID Application/ { print $2; exit }')"
+          test -n "$identity"
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Test
+        run: swift test
+      - name: Build signed app
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          VERSION="$RELEASE_VERSION" \
+          BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+          OUTPUT_DIRECTORY="$RUNNER_TEMP/output" \
+          Scripts/package-app.sh
+      - name: Verify signed app
+        run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra.app"
+      - name: Notarize app
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          submission_archive="$RUNNER_TEMP/submission.zip"
+          release_archive="$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip"
+          ditto -c -k --keepParent "$RUNNER_TEMP/output/Kivra.app" "$submission_archive"
+          xcrun notarytool submit "$submission_archive" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$RUNNER_TEMP/output/Kivra.app"
+          xcrun stapler validate "$RUNNER_TEMP/output/Kivra.app"
+          spctl --assess --type execute --verbose=4 "$RUNNER_TEMP/output/Kivra.app"
+          ditto -c -k --keepParent "$RUNNER_TEMP/output/Kivra.app" "$release_archive"
+          shasum -a 256 "$release_archive" > "$release_archive.sha256"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip" \
+            "$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip.sha256" \
+            --generate-notes \
+            --title "Kivra $RELEASE_VERSION"

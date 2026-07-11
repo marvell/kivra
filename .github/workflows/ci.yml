@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: swift test
+      - name: Build app bundle
+        run: OUTPUT_DIRECTORY="$RUNNER_TEMP/output" Scripts/package-app.sh
+      - name: Verify app bundle
+        run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra.app"
