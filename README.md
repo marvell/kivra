@@ -20,7 +20,7 @@ Kivra is a lightweight, high-performance native app for one of macOS's oldest ty
 2. Open the downloaded disk image.
 3. Drag `Kivra.app` to `Applications`.
 4. Open Kivra from Applications.
-5. Grant access in **System Settings → Privacy & Security → Accessibility**.
+5. Follow the welcome setup to grant Accessibility access and choose a layout for each Shift key.
 
 Kivra checks for updates daily. You can also use **Check for Updates…** from the status bar menu. Updates are downloaded from GitHub Releases, verified, installed in place, and relaunched after confirmation. To uninstall, quit Kivra and move it from Applications to the Bin.
 
@@ -46,11 +46,9 @@ The keyboard icon appears in the status bar.
 
 ## Setup
 
-1. Grant Kivra access in **System Settings → Privacy & Security → Accessibility**.
-2. Open the Kivra status bar menu.
-3. Select a system keyboard input source for **Left Shift**.
-4. Select a system keyboard input source for **Right Shift**.
-5. Optionally change the tap threshold (250 ms by default).
+Kivra opens a guided setup on first launch. It explains and requests Accessibility access, then lets you choose a system keyboard input source for **Left Shift** and **Right Shift**. You can reopen the guide later with **Settings…** from the status bar menu.
+
+The tap threshold is 250 ms by default and can be changed from the guided setup.
 
 Kivra only shows enabled, selectable input sources from macOS settings.
 

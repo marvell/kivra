@@ -1,10 +1,12 @@
 import AppKit
-import ApplicationServices
 import Carbon.HIToolbox
 import Sparkle
 
 @MainActor
 final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
+    private static let onboardingCompletedKey = "onboardingCompleted"
+    private static let thresholdMillisecondsKey = "tapThresholdMilliseconds"
+
     private let inputSources = InputSourceStore()
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard Bundle.main.bundleURL.pathExtension == "app",
@@ -22,9 +24,10 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
         inputSources: inputSources,
         thresholdMilliseconds: thresholdMilliseconds
     )
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private var statusItem: NSStatusItem?
+    private var onboardingController: OnboardingWindowController?
     private var thresholdMilliseconds: Int {
-        let value = UserDefaults.standard.integer(forKey: "tapThresholdMilliseconds")
+        let value = UserDefaults.standard.integer(forKey: Self.thresholdMillisecondsKey)
         return value == 0 ? 250 : value
     }
 
@@ -34,21 +37,26 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "keyboard",
-            accessibilityDescription: "Kivra"
-        )
-        requestAccessibilityIfNeeded()
-        if AXIsProcessTrusted() {
-            monitor.start()
-        }
-        rebuildMenu()
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(inputSourcesChanged),
             name: NSNotification.Name(kTISNotifyEnabledKeyboardInputSourcesChanged as String),
             object: nil
         )
+
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.onboardingCompletedKey) == nil,
+           inputSources.configuredSource(for: .left) != nil,
+           inputSources.configuredSource(for: .right) != nil
+        {
+            defaults.set(true, forKey: Self.onboardingCompletedKey)
+        }
+
+        if defaults.bool(forKey: Self.onboardingCompletedKey) {
+            startApplicationIfNeeded()
+        } else {
+            showOnboarding()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -58,23 +66,7 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
 
     @objc private func inputSourcesChanged() {
         inputSources.refresh()
-        rebuildMenu()
-    }
-
-    @objc private func selectSource(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String,
-              let side = ShiftSide(rawValue: sender.identifier?.rawValue ?? "")
-        else {
-            return
-        }
-        inputSources.setConfiguredSource(id, for: side)
-        rebuildMenu()
-    }
-
-    @objc private func setThreshold(_ sender: NSMenuItem) {
-        UserDefaults.standard.set(sender.tag, forKey: "tapThresholdMilliseconds")
-        monitor.updateThreshold(milliseconds: sender.tag)
-        rebuildMenu()
+        onboardingController?.refreshInputSources()
     }
 
     @objc private func toggleMonitoring(_ sender: NSMenuItem) {
@@ -82,47 +74,61 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
             monitor.stop()
         } else {
             requestAccessibilityIfNeeded()
-            if AXIsProcessTrusted() {
+            if AccessibilityPermission.isGranted {
                 monitor.start()
             }
         }
         rebuildMenu()
     }
 
+    @objc private func showOnboarding() {
+        showWizard(mode: .firstLaunch)
+    }
+
+    @objc private func showSettings() {
+        showWizard(mode: .settings)
+    }
+
+    private func showWizard(mode: OnboardingModel.Mode) {
+        accessibilityChanged()
+        if onboardingController == nil {
+            onboardingController = OnboardingWindowController(
+                inputSources: inputSources,
+                thresholdMilliseconds: thresholdMilliseconds,
+                mode: mode,
+                onAccessibilityChange: { [weak self] in
+                    self?.accessibilityChanged()
+                },
+                onFinish: { [weak self] leftID, rightID, thresholdMilliseconds in
+                    self?.finishOnboarding(
+                        leftID: leftID,
+                        rightID: rightID,
+                        thresholdMilliseconds: thresholdMilliseconds
+                    )
+                },
+                onDismiss: { [weak self] in
+                    self?.onboardingDismissed()
+                }
+            )
+        }
+        onboardingController?.present()
+    }
+
     @objc private func openPrivacySettings() {
-        NSWorkspace.shared.open(
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        )
+        AccessibilityPermission.openSettings()
     }
 
     private func rebuildMenu() {
+        guard let statusItem else {
+            return
+        }
         let menu = NSMenu()
-        let isTrusted = AXIsProcessTrusted()
+        let isTrusted = AccessibilityPermission.isGranted
         let state = isTrusted
             ? (monitor.isRunning ? "Monitoring active" : "Monitoring paused")
             : "Accessibility permission required"
         let stateItem = menu.addItem(withTitle: state, action: nil, keyEquivalent: "")
         stateItem.isEnabled = false
-        menu.addItem(.separator())
-
-        addSourceMenu(title: "Left Shift", side: .left, to: menu)
-        addSourceMenu(title: "Right Shift", side: .right, to: menu)
-
-        let thresholdMenu = NSMenu()
-        for value in [100, 150, 200, 250, 300, 400, 500] {
-            let item = NSMenuItem(
-                title: "\(value) ms",
-                action: #selector(setThreshold(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.tag = value
-            item.state = value == thresholdMilliseconds ? .on : .off
-            thresholdMenu.addItem(item)
-        }
-        let thresholdItem = NSMenuItem(title: "Tap threshold", action: nil, keyEquivalent: "")
-        thresholdItem.submenu = thresholdMenu
-        menu.addItem(thresholdItem)
         menu.addItem(.separator())
 
         let monitoringItem = menu.addItem(
@@ -131,6 +137,13 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
             keyEquivalent: ""
         )
         monitoringItem.target = self
+
+        let setupItem = menu.addItem(
+            withTitle: "Settings…",
+            action: #selector(showSettings),
+            keyEquivalent: ","
+        )
+        setupItem.target = self
 
         if !isTrusted {
             let privacyItem = menu.addItem(
@@ -157,28 +170,65 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
         statusItem.menu = menu
     }
 
-    private func addSourceMenu(title: String, side: ShiftSide, to menu: NSMenu) {
-        let sourceMenu = NSMenu()
-        let selectedID = inputSources.configuredSource(for: side)
-
-        for source in inputSources.availableSources() {
-            let item = NSMenuItem(title: source.name, action: #selector(selectSource(_:)), keyEquivalent: "")
-            item.target = self
-            item.identifier = NSUserInterfaceItemIdentifier(side.rawValue)
-            item.representedObject = source.id
-            item.state = source.id == selectedID ? .on : .off
-            sourceMenu.addItem(item)
-        }
-
-        let sourceItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        sourceItem.submenu = sourceMenu
-        menu.addItem(sourceItem)
-    }
-
     private func requestAccessibilityIfNeeded() {
-        guard !AXIsProcessTrusted() else {
+        guard !AccessibilityPermission.isGranted else {
             return
         }
-        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        AccessibilityPermission.request()
+    }
+
+    private func accessibilityChanged() {
+        guard statusItem != nil else {
+            return
+        }
+        if AccessibilityPermission.isGranted {
+            if !monitor.isRunning {
+                monitor.start()
+            }
+        } else if monitor.isRunning {
+            monitor.stop()
+        }
+        rebuildMenu()
+    }
+
+    private func finishOnboarding(
+        leftID: String,
+        rightID: String,
+        thresholdMilliseconds: Int
+    ) {
+        inputSources.setConfiguredSource(leftID, for: .left)
+        inputSources.setConfiguredSource(rightID, for: .right)
+        UserDefaults.standard.set(thresholdMilliseconds, forKey: Self.thresholdMillisecondsKey)
+        monitor.updateThreshold(milliseconds: thresholdMilliseconds)
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
+        onboardingController?.completeAndClose()
+        onboardingController = nil
+        startApplicationIfNeeded()
+    }
+
+    private func onboardingDismissed() {
+        onboardingController = nil
+        if !UserDefaults.standard.bool(forKey: Self.onboardingCompletedKey) {
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func startApplicationIfNeeded() {
+        guard statusItem == nil else {
+            rebuildMenu()
+            return
+        }
+
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = NSImage(
+            systemSymbolName: "keyboard",
+            accessibilityDescription: "Kivra"
+        )
+        statusItem = item
+
+        if AccessibilityPermission.isGranted {
+            monitor.start()
+        }
+        rebuildMenu()
     }
 }
