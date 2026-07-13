@@ -26,5 +26,17 @@
     <string>15.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://marvell.github.io/kivra/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>37V+opO1CeNWInqnwvCW62qZ7u1F1+uA13yBd1vx1uk=</string>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
 </dict>
 </plist>

@@ -7,6 +7,12 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-feed
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -18,14 +24,58 @@ jobs:
       APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - name: Set release version
         id: version
         run: |
           version="${GITHUB_REF_NAME#v}"
           [[ "$version" =~ ^[0-9]+(\.[0-9]+){2}(-[0-9A-Za-z.-]+)?$ ]]
           echo "value=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "channel=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Inspect release state
+        id: release-state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if is_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$is_draft" == true ]]; then
+              state="draft"
+            else
+              state="published"
+            fi
+          else
+            state="new"
+          fi
+          echo "value=$state" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to mutate an incomplete draft
+        if: steps.release-state.outputs.value == 'draft'
+        run: |
+          echo "A draft release already exists for $GITHUB_REF_NAME; inspect it before retrying." >&2
+          exit 1
+
+      - name: Validate release secrets
+        if: steps.release-state.outputs.value == 'new'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APPLE_CERTIFICATE_BASE64"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$SPARKLE_PRIVATE_KEY"
+
       - name: Import Developer ID certificate
+        if: steps.release-state.outputs.value == 'new'
         id: signing
         run: |
           keychain="$RUNNER_TEMP/app-signing.keychain-db"
@@ -38,12 +88,16 @@ jobs:
           security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
           security list-keychain -d user -s "$keychain"
-          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F '\"' '/Developer ID Application/ { print $2; exit }')"
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
           test -n "$identity"
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
+
       - name: Test
+        if: steps.release-state.outputs.value == 'new'
         run: swift test
+
       - name: Build signed app
+        if: steps.release-state.outputs.value == 'new'
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.value }}
           SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
@@ -52,17 +106,17 @@ jobs:
           BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
           OUTPUT_DIRECTORY="$RUNNER_TEMP/output" \
           Scripts/package-app.sh
+
       - name: Verify signed app
+        if: steps.release-state.outputs.value == 'new'
         run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra.app"
-      - name: Notarize app
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+
+      - name: Notarize and staple app
+        if: steps.release-state.outputs.value == 'new'
         run: |
-          mkdir -p "$RUNNER_TEMP/release"
-          submission_archive="$RUNNER_TEMP/submission.zip"
-          release_archive="$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip"
-          ditto -c -k --keepParent "$RUNNER_TEMP/output/Kivra.app" "$submission_archive"
-          xcrun notarytool submit "$submission_archive" \
+          submission="$RUNNER_TEMP/Kivra-notarization.zip"
+          ditto -c -k --keepParent "$RUNNER_TEMP/output/Kivra.app" "$submission"
+          xcrun notarytool submit "$submission" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
@@ -70,15 +124,148 @@ jobs:
           xcrun stapler staple "$RUNNER_TEMP/output/Kivra.app"
           xcrun stapler validate "$RUNNER_TEMP/output/Kivra.app"
           spctl --assess --type execute --verbose=4 "$RUNNER_TEMP/output/Kivra.app"
-          ditto -c -k --keepParent "$RUNNER_TEMP/output/Kivra.app" "$release_archive"
-          shasum -a 256 "$release_archive" > "$release_archive.sha256"
-      - name: Publish GitHub release
+
+      - name: Package signed disk image
+        if: steps.release-state.outputs.value == 'new'
+        id: package
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          release_directory="$RUNNER_TEMP/release"
+          disk_image="$release_directory/Kivra-$RELEASE_VERSION-macOS-arm64.dmg"
+          mkdir -p "$release_directory"
+          VERSION="$RELEASE_VERSION" Scripts/package-dmg.sh "$RUNNER_TEMP/output/Kivra.app" "$disk_image"
+          echo "disk_image=$disk_image" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize and staple disk image
+        if: steps.release-state.outputs.value == 'new'
+        env:
+          DISK_IMAGE: ${{ steps.package.outputs.disk_image }}
+        run: |
+          Scripts/verify-dmg.sh "$DISK_IMAGE"
+          xcrun notarytool submit "$DISK_IMAGE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DISK_IMAGE"
+          xcrun stapler validate "$DISK_IMAGE"
+          codesign --verify --verbose=2 "$DISK_IMAGE"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DISK_IMAGE"
+
+      - name: Generate signed appcast and release notes
+        if: steps.release-state.outputs.value == 'new'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          DISK_IMAGE: ${{ steps.package.outputs.disk_image }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_CHANNEL: ${{ steps.version.outputs.channel }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip" \
-            "$RUNNER_TEMP/release/Kivra-$RELEASE_VERSION-macOS-arm64.zip.sha256" \
-            --generate-notes \
+          archives="$RUNNER_TEMP/archives"
+          pages="$RUNNER_TEMP/pages"
+          notes="$archives/Kivra-$RELEASE_VERSION-macOS-arm64.md"
+          mkdir -p "$archives" "$pages"
+          cp "$DISK_IMAGE" "$archives/"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" \
+            --jq .body > "$notes"
+          previous_appcast_url="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '
+            [
+              .[]
+              | select(.draft == false and .published_at != null)
+              | {
+                  published_at,
+                  asset: ([.assets[] | select(.name == "appcast.xml")][0])
+                }
+              | select(.asset != null)
+            ]
+            | max_by(.published_at).asset.url // empty
+          ')"
+          if [[ -n "$previous_appcast_url" ]]; then
+            gh api \
+              --header "Accept: application/octet-stream" \
+              "$previous_appcast_url" > "$archives/appcast.xml"
+          fi
+          Scripts/generate-appcast.sh "$archives" "$GITHUB_REF_NAME"
+          cp "$archives/appcast.xml" "$pages/appcast.xml"
+          touch "$pages/.nojekyll"
+          disk_image_name="$(basename "$DISK_IMAGE")"
+          (cd "$(dirname "$DISK_IMAGE")" && shasum -a 256 "$disk_image_name" > "$disk_image_name.sha256")
+          cp "$archives/appcast.xml" "$(dirname "$DISK_IMAGE")/appcast.xml"
+          cp "$notes" "$RUNNER_TEMP/release-notes.md"
+
+      - name: Publish GitHub release
+        if: steps.release-state.outputs.value == 'new'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          DISK_IMAGE: ${{ steps.package.outputs.disk_image }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          release_flags=(
+            --draft
+            --verify-tag
             --title "Kivra $RELEASE_VERSION"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+          )
+          if [[ "$PRERELEASE" == true ]]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "$DISK_IMAGE" \
+            "$DISK_IMAGE.sha256" \
+            "$RUNNER_TEMP/release/appcast.xml" \
+            "${release_flags[@]}"
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+
+      - name: Confirm published update assets
+        if: steps.release-state.outputs.value == 'new'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors \
+            --output /dev/null "$base/Kivra-$RELEASE_VERSION-macOS-arm64.dmg"
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors \
+            --output /dev/null "$base/appcast.xml"
+
+      - name: Restore latest published feed
+        if: steps.release-state.outputs.value == 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pages"
+          latest_tag="$(gh release list \
+            --limit 100 \
+            --json tagName,isDraft,publishedAt \
+            --jq 'map(select(.isDraft == false)) | max_by(.publishedAt).tagName // empty')"
+          test -n "$latest_tag"
+          gh release download "$latest_tag" \
+            --pattern appcast.xml \
+            --dir "$RUNNER_TEMP/pages"
+          touch "$RUNNER_TEMP/pages/.nojekyll"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages
+
+  deploy-feed:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy signed appcast
+        id: deployment
+        uses: actions/deploy-pages@v4

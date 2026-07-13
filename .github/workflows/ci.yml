@@ -10,10 +10,14 @@ jobs:
   test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run tests
         run: swift test
       - name: Build app bundle
         run: OUTPUT_DIRECTORY="$RUNNER_TEMP/output" Scripts/package-app.sh
       - name: Verify app bundle
         run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra.app"
+      - name: Package disk image
+        run: VERSION=0.0.0 Scripts/package-dmg.sh "$RUNNER_TEMP/output/Kivra.app" "$RUNNER_TEMP/Kivra-0.0.0-macOS-arm64.dmg"
+      - name: Verify disk image
+        run: Scripts/verify-dmg.sh "$RUNNER_TEMP/Kivra-0.0.0-macOS-arm64.dmg"

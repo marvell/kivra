@@ -16,15 +16,16 @@ Kivra is a lightweight, high-performance native app for one of macOS's oldest ty
 
 ## Install
 
-1. Download `Kivra-<version>-macOS-arm64.zip` from the [latest release](https://github.com/marvell/kivra/releases/latest).
-2. Open the downloaded ZIP file.
+1. Download `Kivra-<version>-macOS-arm64.dmg` from the [latest release](https://github.com/marvell/kivra/releases/latest).
+2. Open the downloaded disk image.
 3. Drag `Kivra.app` to `Applications`.
 4. Open Kivra from Applications.
 5. Grant access in **System Settings → Privacy & Security → Accessibility**.
 
-To update, replace Kivra in Applications with the app from a newer release. To uninstall, quit Kivra and move it from Applications to the Bin.
+Kivra checks for updates daily. You can also use **Check for Updates…** from the status bar menu. Updates are downloaded from GitHub Releases, verified, installed in place, and relaunched after confirmation. To uninstall, quit Kivra and move it from Applications to the Bin.
 
 Kivra is signed and notarized by its publisher. It is distributed through GitHub Releases, not the Mac App Store.
+It uses the [Sparkle](https://sparkle-project.org/) update framework; its license is included in the application bundle.
 
 ## Develop
 
@@ -74,12 +75,17 @@ Maintainers need an Apple Developer account with a Developer ID Application cert
 - `APPLE_ID`, the Apple Account used for notarization.
 - `APPLE_APP_SPECIFIC_PASSWORD`, an app-specific password for that account.
 - `APPLE_TEAM_ID`, the Apple Developer team ID.
+- `SPARKLE_PRIVATE_KEY`, the base64-encoded private Ed25519 key exported by Sparkle's `generate_keys` tool. Keep an offline backup and never commit it.
+
+GitHub Pages must use **GitHub Actions** as its publishing source. The release workflow publishes the signed Sparkle feed at `https://marvell.github.io/kivra/appcast.xml` only after the corresponding GitHub Release assets are downloadable.
 
 Create and push a semantic-version tag to publish a release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-The release workflow tests Kivra, builds and signs the Apple Silicon app, submits it for notarization, and uploads a ZIP archive with its SHA-256 checksum.
+The release workflow tests Kivra, signs the app and its embedded Sparkle helpers, notarizes the app and disk image, publishes the DMG with its SHA-256 checksum, and deploys a signed Sparkle appcast. Published releases are treated as immutable; rerunning a completed release only republishes its existing appcast.
+
+The first Sparkle-enabled release still needs to be installed manually by users of `v0.1.0`. Releases after that can update in place.

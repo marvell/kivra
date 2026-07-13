@@ -1,10 +1,23 @@
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import Sparkle
 
 @MainActor
-final class StatusBarController: NSObject, NSApplicationDelegate {
+final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private let inputSources = InputSourceStore()
+    private lazy var updaterController: SPUStandardUpdaterController? = {
+        guard Bundle.main.bundleURL.pathExtension == "app",
+              Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
+        else {
+            return nil
+        }
+        return SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: self,
+            userDriverDelegate: nil
+        )
+    }()
     private lazy var monitor = ShiftEventMonitor(
         inputSources: inputSources,
         thresholdMilliseconds: thresholdMilliseconds
@@ -13,6 +26,11 @@ final class StatusBarController: NSObject, NSApplicationDelegate {
     private var thresholdMilliseconds: Int {
         let value = UserDefaults.standard.integer(forKey: "tapThresholdMilliseconds")
         return value == 0 ? 250 : value
+    }
+
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return version?.contains("-") == true ? ["beta"] : []
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -121,6 +139,16 @@ final class StatusBarController: NSObject, NSApplicationDelegate {
                 keyEquivalent: ""
             )
             privacyItem.target = self
+        }
+
+        if let updaterController {
+            menu.addItem(.separator())
+            let updateItem = menu.addItem(
+                withTitle: "Check for Updates…",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                keyEquivalent: ""
+            )
+            updateItem.target = updaterController
         }
 
         menu.addItem(.separator())
