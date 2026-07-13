@@ -138,8 +138,8 @@ final class ShiftEventMonitor: @unchecked Sendable {
         let timestamp = event.timestamp
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
 
+        var sourceIDToSelect: String?
         stateLock.lock()
-        defer { stateLock.unlock() }
 
         switch type {
         case .keyDown:
@@ -152,13 +152,21 @@ final class ShiftEventMonitor: @unchecked Sendable {
                     isDown: isDown,
                     timestamp: timestamp
                 ) {
-                    inputSources.select(id: inputSources.configuredSource(for: selectedSide))
+                    sourceIDToSelect = inputSources.configuredSource(for: selectedSide)
                 }
             } else {
                 classifier.otherKeyChanged()
             }
         default:
             break
+        }
+
+        stateLock.unlock()
+
+        if let sourceIDToSelect {
+            Task { @MainActor [inputSources] in
+                inputSources.select(id: sourceIDToSelect)
+            }
         }
 
         return Unmanaged.passUnretained(event)

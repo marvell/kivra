@@ -48,6 +48,7 @@ final class InputSourceStore: @unchecked Sendable {
         lock.unlock()
     }
 
+    @MainActor
     func select(id: String?) {
         guard let id else {
             return
