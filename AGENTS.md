@@ -1,5 +1,7 @@
 # Development Commands
 
+Create commits that are useful from a changelog perspective.
+
 Use the Taskfile commands for common development work:
 
 - `task run` to run Kivra.

@@ -17,6 +17,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         inputSources: InputSourceStore,
         thresholdMilliseconds: Int,
         mode: OnboardingModel.Mode,
+        launchAtLogin: any LaunchAtLoginControlling,
         onAccessibilityChange: @escaping () -> Void,
         onFinish: @escaping (String, String, Int) -> Void,
         onDismiss: @escaping () -> Void
@@ -29,6 +30,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             configuredRightID: inputSources.configuredSource(for: .right),
             thresholdMilliseconds: thresholdMilliseconds,
             mode: mode,
+            launchAtLogin: launchAtLogin,
             onAccessibilityChange: onAccessibilityChange,
             onFinish: onFinish
         )
@@ -72,6 +74,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func present() {
+        model.refreshLaunchAtLogin()
         model.startPermissionObservation()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -129,11 +132,15 @@ final class OnboardingModel: ObservableObject {
     }
     @Published var selectedRightID: String
     @Published var thresholdMilliseconds: Int
+    @Published var isLaunchAtLoginEnabled: Bool
+    @Published private(set) var launchAtLoginState: LaunchAtLoginState
+    @Published private(set) var launchAtLoginError: String?
 
     @Published private(set) var sources: [InputSource]
     let mode: Mode
     private let onAccessibilityChange: () -> Void
     private let onFinish: (String, String, Int) -> Void
+    private let launchAtLogin: any LaunchAtLoginControlling
     private var permissionTask: Task<Void, Never>?
 
     init(
@@ -142,6 +149,7 @@ final class OnboardingModel: ObservableObject {
         configuredRightID: String?,
         thresholdMilliseconds: Int,
         mode: Mode = .firstLaunch,
+        launchAtLogin: any LaunchAtLoginControlling = LaunchAtLoginController(),
         onAccessibilityChange: @escaping () -> Void,
         accessibilityGranted: Bool = AccessibilityPermission.isGranted,
         onFinish: @escaping (String, String, Int) -> Void
@@ -154,9 +162,15 @@ final class OnboardingModel: ObservableObject {
             leftID: configuredLeftID,
             rightID: configuredRightID
         )
+        let initialLaunchAtLoginState = launchAtLogin.state
         selectedLeftID = selections.left
         selectedRightID = selections.right
         self.thresholdMilliseconds = Self.normalizedThreshold(thresholdMilliseconds)
+        self.launchAtLogin = launchAtLogin
+        launchAtLoginState = initialLaunchAtLoginState
+        isLaunchAtLoginEnabled = mode == .firstLaunch
+            ? true
+            : initialLaunchAtLoginState.isEnabled
         if mode == .settings {
             step = accessibilityGranted ? .layouts : .permission
         } else {
@@ -173,6 +187,14 @@ final class OnboardingModel: ObservableObject {
     var canConfigureLayouts: Bool {
         !selectedLeftID.isEmpty && !selectedRightID.isEmpty &&
             selectedLeftID != selectedRightID
+    }
+
+    var isLaunchAtLoginAvailable: Bool {
+        launchAtLoginState.isAvailable
+    }
+
+    var launchAtLoginRequiresApproval: Bool {
+        launchAtLoginState == .requiresApproval
     }
 
     var selectedLeftName: String {
@@ -229,7 +251,28 @@ final class OnboardingModel: ObservableObject {
 
     func finish() {
         guard canConfigureLayouts else { return }
+        do {
+            try launchAtLogin.setEnabled(isLaunchAtLoginEnabled)
+            launchAtLoginState = launchAtLogin.state
+            launchAtLoginError = nil
+        } catch {
+            launchAtLoginState = launchAtLogin.state
+            launchAtLoginError = "Could not update Open at Login. Try again."
+            return
+        }
         onFinish(selectedLeftID, selectedRightID, thresholdMilliseconds)
+    }
+
+    func refreshLaunchAtLogin() {
+        launchAtLogin.refresh()
+        launchAtLoginState = launchAtLogin.state
+        if mode == .settings {
+            isLaunchAtLoginEnabled = launchAtLoginState.isEnabled
+        }
+    }
+
+    func openLoginItemsSettings() {
+        launchAtLogin.openLoginItemsSettings()
     }
 
     func updateSources(_ updatedSources: [InputSource]) {
@@ -527,6 +570,10 @@ private struct OnboardingView: View {
                 .frame(maxWidth: 420)
                 .padding(.top, 8)
 
+            launchAtLoginConfiguration
+                .frame(maxWidth: 420)
+                .padding(.top, 8)
+
             Group {
                 if model.sources.count < 2 {
                     Text("\(applicationName) needs two enabled keyboard layouts.")
@@ -657,6 +704,108 @@ private struct OnboardingView: View {
             reduceMotion ? nil : .easeOut(duration: 0.16),
             value: model.thresholdMilliseconds
         )
+    }
+
+    private var launchAtLoginConfiguration: some View {
+        VStack(spacing: 0) {
+            Toggle(isOn: $model.isLaunchAtLoginEnabled) {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.up.forward.app.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(accent)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(accent.opacity(0.10))
+                        )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Open Kivra at login")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    }
+
+                    Spacer()
+
+                    Text(model.isLaunchAtLoginEnabled ? "ON" : "OFF")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .tracking(0.7)
+                        .foregroundStyle(
+                            model.isLaunchAtLoginEnabled
+                                ? accent
+                                : .white.opacity(0.38)
+                        )
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(accent)
+            .padding(.horizontal, 14)
+            .frame(height: 50)
+            .disabled(!model.isLaunchAtLoginAvailable)
+            .accessibilityLabel("Open Kivra at login")
+            .accessibilityHint(
+                model.isLaunchAtLoginAvailable
+                    ? "Applies when you save changes"
+                    : "Available in the installed app"
+            )
+
+            if model.launchAtLoginRequiresApproval {
+                launchAtLoginStatus(
+                    symbol: "exclamationmark.circle.fill",
+                    "Allow it in Login Items.",
+                    color: Color(red: 1.0, green: 0.68, blue: 0.30),
+                    action: model.openLoginItemsSettings
+                )
+            } else if let error = model.launchAtLoginError {
+                launchAtLoginStatus(
+                    symbol: "exclamationmark.triangle.fill",
+                    error,
+                    color: accent
+                )
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(panel)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(border, lineWidth: 1)
+        )
+    }
+
+    private func launchAtLoginStatus(
+        symbol: String,
+        _ message: String,
+        color: Color,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+
+            Text(message)
+                .lineLimit(1)
+
+            Spacer()
+
+            if let action {
+                Button("Open Settings", action: action)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(color)
+            }
+        }
+        .font(.system(size: 11, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.50))
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .background(Color.white.opacity(0.025))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(height: 1)
+        }
     }
 
     private func languageKey(side: String, language: String) -> some View {

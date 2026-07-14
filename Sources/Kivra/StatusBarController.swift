@@ -8,6 +8,7 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     private static let thresholdMillisecondsKey = "tapThresholdMilliseconds"
 
     private let inputSources = InputSourceStore()
+    private let launchAtLogin = LaunchAtLoginController()
     private let applicationIdentity = ApplicationIdentity.current
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard Bundle.main.bundleURL.pathExtension == "app",
@@ -97,6 +98,7 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
                 inputSources: inputSources,
                 thresholdMilliseconds: thresholdMilliseconds,
                 mode: mode,
+                launchAtLogin: launchAtLogin,
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()
                 },

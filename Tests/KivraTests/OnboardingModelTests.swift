@@ -136,6 +136,105 @@ final class OnboardingModelTests: XCTestCase {
         XCTAssertEqual(completedThreshold, 350)
     }
 
+    @MainActor
+    func testFirstLaunchEnablesLaunchAtLoginByDefault() {
+        let launchAtLogin = FakeLaunchAtLoginController(state: .disabled)
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            launchAtLogin: launchAtLogin,
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in }
+        )
+
+        XCTAssertTrue(model.isLaunchAtLoginEnabled)
+        XCTAssertTrue(model.isLaunchAtLoginAvailable)
+    }
+
+    @MainActor
+    func testSettingsUsesCurrentLaunchAtLoginState() {
+        let launchAtLogin = FakeLaunchAtLoginController(state: .enabled)
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            mode: .settings,
+            launchAtLogin: launchAtLogin,
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in }
+        )
+
+        XCTAssertTrue(model.isLaunchAtLoginEnabled)
+    }
+
+    @MainActor
+    func testSettingsRefreshUsesCurrentLaunchAtLoginState() {
+        let launchAtLogin = FakeLaunchAtLoginController(state: .enabled)
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            mode: .settings,
+            launchAtLogin: launchAtLogin,
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in }
+        )
+        launchAtLogin.state = .disabled
+
+        model.refreshLaunchAtLogin()
+
+        XCTAssertFalse(model.isLaunchAtLoginEnabled)
+    }
+
+    @MainActor
+    func testFinishAppliesLaunchAtLoginSelectionBeforeCompleting() {
+        let launchAtLogin = FakeLaunchAtLoginController(state: .disabled)
+        var didFinish = false
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            launchAtLogin: launchAtLogin,
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in
+                didFinish = true
+            }
+        )
+
+        model.finish()
+
+        XCTAssertEqual(launchAtLogin.appliedValues, [true])
+        XCTAssertTrue(didFinish)
+    }
+
+    @MainActor
+    func testLaunchAtLoginFailurePreventsCompletion() {
+        let launchAtLogin = FakeLaunchAtLoginController(state: .disabled)
+        launchAtLogin.setEnabledError = FakeLaunchAtLoginError.failed
+        var didFinish = false
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            launchAtLogin: launchAtLogin,
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in
+                didFinish = true
+            }
+        )
+
+        model.finish()
+
+        XCTAssertFalse(didFinish)
+        XCTAssertEqual(model.launchAtLoginError, "Could not update Open at Login. Try again.")
+    }
+
     private func source(_ id: String) -> InputSource {
         InputSource(id: id, name: id.uppercased())
     }
@@ -160,4 +259,31 @@ final class OnboardingModelTests: XCTestCase {
             onFinish: { _, _, _ in }
         )
     }
+}
+
+@MainActor
+private final class FakeLaunchAtLoginController: LaunchAtLoginControlling {
+    var state: LaunchAtLoginState
+    var appliedValues: [Bool] = []
+    var setEnabledError: Error?
+
+    init(state: LaunchAtLoginState) {
+        self.state = state
+    }
+
+    func refresh() {}
+
+    func setEnabled(_ enabled: Bool) throws {
+        appliedValues.append(enabled)
+        if let setEnabledError {
+            throw setEnabledError
+        }
+        state = enabled ? .enabled : .disabled
+    }
+
+    func openLoginItemsSettings() {}
+}
+
+private enum FakeLaunchAtLoginError: Error {
+    case failed
 }

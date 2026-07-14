@@ -21,6 +21,16 @@ tasks:
     cmds:
       - swift test
 
+  reset-onboarding:
+    desc: Reset Kivra and Kivra Dev onboarding preferences (quit both first)
+    cmds:
+      - defaults delete com.zemliakov.kivra onboardingCompleted || true
+      - defaults delete com.zemliakov.kivra leftInputSourceID || true
+      - defaults delete com.zemliakov.kivra rightInputSourceID || true
+      - defaults delete com.zemliakov.kivra.dev onboardingCompleted || true
+      - defaults delete com.zemliakov.kivra.dev leftInputSourceID || true
+      - defaults delete com.zemliakov.kivra.dev rightInputSourceID || true
+
   install-dev:
     desc: Build and install the development app
     cmds:
