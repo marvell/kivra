@@ -1,14 +1,43 @@
-import Foundation
-
-enum ShiftSide: String, CaseIterable, Sendable {
+enum ShiftSide: String, Sendable {
     case left
     case right
+
+    init?(keyCode: UInt16) {
+        switch keyCode {
+        case Self.left.keyCode: self = .left
+        case Self.right.keyCode: self = .right
+        default: return nil
+        }
+    }
 
     var keyCode: UInt16 {
         switch self {
         case .left: 0x38
         case .right: 0x3C
         }
+    }
+
+    // Quartz preserves the device-dependent modifier bits from IOLLEvent.h
+    // even though CGEventFlags only names the device-independent masks.
+    var deviceFlagMask: UInt64 {
+        switch self {
+        case .left: 0x02
+        case .right: 0x04
+        }
+    }
+
+    func isPressed(eventFlags: UInt64, previouslyPressed: Bool) -> Bool {
+        let shiftDeviceFlags: UInt64 = 0x02 | 0x04
+        let shiftFlag: UInt64 = 0x0002_0000
+        if eventFlags & deviceFlagMask != 0 {
+            return true
+        }
+        if eventFlags & shiftDeviceFlags != 0 || eventFlags & shiftFlag == 0 {
+            return false
+        }
+
+        // Synthesized events may omit device-dependent left/right bits.
+        return !previouslyPressed
     }
 }
 
@@ -18,9 +47,14 @@ enum ShiftTapAction: Equatable, Sendable {
 }
 
 struct ShiftTapClassifier: Sendable {
-    private var pressedAt: [ShiftSide: UInt64] = [:]
-    private var invalidSides: Set<ShiftSide> = []
-    private var pressedSides: Set<ShiftSide> = []
+    private struct State: Sendable {
+        var pressedAt: UInt64 = 0
+        var isPressed = false
+        var isInvalid = false
+    }
+
+    private var left = State()
+    private var right = State()
 
     let maximumDurationNanoseconds: UInt64
 
@@ -30,48 +64,65 @@ struct ShiftTapClassifier: Sendable {
 
     mutating func shiftChanged(side: ShiftSide, isDown: Bool, timestamp: UInt64) -> ShiftTapAction {
         if isDown {
-            guard !pressedSides.contains(side) else {
-                return .none
-            }
-
-            let overlapsAnotherShift = !pressedSides.isEmpty
-            invalidateCandidates(except: side)
-            pressedSides.insert(side)
-            pressedAt[side] = timestamp
-            invalidSides.remove(side)
-            if overlapsAnotherShift {
-                invalidSides.insert(side)
+            switch side {
+            case .left:
+                guard !left.isPressed else {
+                    return .none
+                }
+                let overlapsRight = right.isPressed
+                right.isInvalid = right.isInvalid || overlapsRight
+                left = State(pressedAt: timestamp, isPressed: true, isInvalid: overlapsRight)
+            case .right:
+                guard !right.isPressed else {
+                    return .none
+                }
+                let overlapsLeft = left.isPressed
+                left.isInvalid = left.isInvalid || overlapsLeft
+                right = State(pressedAt: timestamp, isPressed: true, isInvalid: overlapsLeft)
             }
             return .none
         }
 
-        guard pressedSides.remove(side) != nil, let startedAt = pressedAt.removeValue(forKey: side) else {
-            return .none
+        let isValid: Bool
+        switch side {
+        case .left:
+            isValid = Self.release(&left, timestamp: timestamp, maximumDuration: maximumDurationNanoseconds)
+        case .right:
+            isValid = Self.release(&right, timestamp: timestamp, maximumDuration: maximumDurationNanoseconds)
         }
-
-        let isValid = !invalidSides.contains(side) && timestamp >= startedAt
-            && timestamp - startedAt <= maximumDurationNanoseconds
-        invalidSides.remove(side)
         return isValid ? .select(side) : .none
     }
 
     mutating func otherKeyChanged() {
-        invalidateCandidates(except: nil)
+        left.isInvalid = left.isInvalid || left.isPressed
+        right.isInvalid = right.isInvalid || right.isPressed
     }
 
     mutating func reset() {
-        pressedAt.removeAll()
-        invalidSides.removeAll()
-        pressedSides.removeAll()
+        left = State()
+        right = State()
     }
 
     func isPressed(_ side: ShiftSide) -> Bool {
-        pressedSides.contains(side)
+        switch side {
+        case .left: left.isPressed
+        case .right: right.isPressed
+        }
     }
 
-    private mutating func invalidateCandidates(except allowedSide: ShiftSide?) {
-        for side in pressedSides where side != allowedSide {
-            invalidSides.insert(side)
+    private static func release(
+        _ state: inout State,
+        timestamp: UInt64,
+        maximumDuration: UInt64
+    ) -> Bool {
+        guard state.isPressed else {
+            return false
         }
+
+        let startedAt = state.pressedAt
+        let isValid = !state.isInvalid && timestamp >= startedAt
+            && timestamp - startedAt <= maximumDuration
+        state = State()
+        return isValid
     }
 }

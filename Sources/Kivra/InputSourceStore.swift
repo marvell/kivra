@@ -7,22 +7,30 @@ struct InputSource: Identifiable, Hashable {
     let name: String
 }
 
-final class InputSourceStore: @unchecked Sendable {
+@MainActor
+final class InputSourceStore {
     static let leftSourceKey = "leftInputSourceID"
     static let rightSourceKey = "rightInputSourceID"
 
-    private let lock = NSLock()
+    private struct SelectionTarget {
+        let id: String
+        let source: TISInputSource
+    }
+
     private var sourcesByID: [String: TISInputSource] = [:]
+    private var leftID: String?
+    private var rightID: String?
+    private var leftTarget: SelectionTarget?
+    private var rightTarget: SelectionTarget?
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
 
     init() {
+        leftID = UserDefaults.standard.string(forKey: Self.leftSourceKey)
+        rightID = UserDefaults.standard.string(forKey: Self.rightSourceKey)
         refresh()
     }
 
     func availableSources() -> [InputSource] {
-        lock.lock()
-        defer { lock.unlock() }
-
         return sourcesByID.map { InputSource(id: $0.key, name: Self.name(for: $0.value) ?? $0.key) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -43,38 +51,55 @@ final class InputSourceStore: @unchecked Sendable {
             }
         )
 
-        lock.lock()
         sourcesByID = updatedSources
-        lock.unlock()
+        rebuildSelectionTargets()
     }
 
-    @MainActor
-    func select(id: String?) {
-        guard let id else {
-            return
+    func select(for side: ShiftSide) {
+        var target = selectionTarget(for: side)
+        if target == nil {
+            // The source may have been enabled before its distributed
+            // notification reached the main run loop.
+            refresh()
+            target = selectionTarget(for: side)
         }
 
-        lock.lock()
-        let source = sourcesByID[id]
-        lock.unlock()
-
-        guard let source else {
+        guard let target else {
             logger.error("Configured input source is unavailable")
             return
         }
 
-        let status = TISSelectInputSource(source)
+        var status = TISSelectInputSource(target.source)
+        if status == noErr {
+            return
+        }
+
+        // The enabled-source notification can race with a tap. Rebuild the
+        // retained TISInputSource snapshot and retry once instead of dropping
+        // the user's switch.
+        refresh()
+        if let refreshedTarget = selectionTarget(for: side) {
+            status = TISSelectInputSource(refreshedTarget.source)
+        }
         if status != noErr {
-            logger.error("Input source selection failed with status \(status)")
+            logger.error("Input source selection failed with status \(status), id: \(target.id, privacy: .public)")
         }
     }
 
     func configuredSource(for side: ShiftSide) -> String? {
-        UserDefaults.standard.string(forKey: preferenceKey(for: side))
+        switch side {
+        case .left: leftID
+        case .right: rightID
+        }
     }
 
     func setConfiguredSource(_ id: String, for side: ShiftSide) {
-        UserDefaults.standard.set(id, forKey: preferenceKey(for: side))
+        switch side {
+        case .left: leftID = id
+        case .right: rightID = id
+        }
+        UserDefaults.standard.set(id, forKey: Self.preferenceKey(for: side))
+        rebuildSelectionTargets()
     }
 
     func configuredSourceName(for side: ShiftSide) -> String? {
@@ -82,12 +107,26 @@ final class InputSourceStore: @unchecked Sendable {
             return nil
         }
 
-        lock.lock()
-        defer { lock.unlock() }
         return sourcesByID[id].flatMap(Self.name(for:))
     }
 
-    private func preferenceKey(for side: ShiftSide) -> String {
+    private func selectionTarget(for side: ShiftSide) -> SelectionTarget? {
+        switch side {
+        case .left: leftTarget
+        case .right: rightTarget
+        }
+    }
+
+    private func rebuildSelectionTargets() {
+        leftTarget = leftID.flatMap { id in
+            sourcesByID[id].map { SelectionTarget(id: id, source: $0) }
+        }
+        rightTarget = rightID.flatMap { id in
+            sourcesByID[id].map { SelectionTarget(id: id, source: $0) }
+        }
+    }
+
+    private static func preferenceKey(for side: ShiftSide) -> String {
         switch side {
         case .left: Self.leftSourceKey
         case .right: Self.rightSourceKey
