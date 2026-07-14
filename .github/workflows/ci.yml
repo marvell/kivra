@@ -17,6 +17,10 @@ jobs:
         run: OUTPUT_DIRECTORY="$RUNNER_TEMP/output" Scripts/package-app.sh
       - name: Verify app bundle
         run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra.app"
+      - name: Build development app bundle
+        run: BUILD_VARIANT=dev OUTPUT_DIRECTORY="$RUNNER_TEMP/output" Scripts/package-app.sh
+      - name: Verify development app bundle
+        run: Scripts/verify-app.sh "$RUNNER_TEMP/output/Kivra Dev.app"
       - name: Package disk image
         run: VERSION=0.0.0 Scripts/package-dmg.sh "$RUNNER_TEMP/output/Kivra.app" "$RUNNER_TEMP/Kivra-0.0.0-macOS-arm64.dmg"
       - name: Verify disk image

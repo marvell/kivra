@@ -50,7 +50,10 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         hostingView.layer?.cornerCurve = .continuous
         hostingView.layer?.masksToBounds = true
 
-        window.title = mode == .firstLaunch ? "Welcome to Kivra" : "Kivra Settings"
+        let applicationName = ApplicationIdentity.current.displayName
+        window.title = mode == .firstLaunch
+            ? "Welcome to \(applicationName)"
+            : "\(applicationName) Settings"
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.isOpaque = false
@@ -302,6 +305,7 @@ private struct OnboardingView: View {
     private let accent = Color(red: 1.0, green: 0.39, blue: 0.28)
     private let panel = Color.white.opacity(0.055)
     private let border = Color.white.opacity(0.10)
+    private let applicationName = ApplicationIdentity.current.displayName
     private let appVersion = Bundle.main.object(
         forInfoDictionaryKey: "CFBundleShortVersionString"
     ) as? String
@@ -394,7 +398,7 @@ private struct OnboardingView: View {
             }
             .frame(width: 25, height: 25)
 
-            Text("Kivra")
+            Text(applicationName)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
 
             if let appVersion {
@@ -433,7 +437,7 @@ private struct OnboardingView: View {
                 .tracking(-0.7)
                 .padding(.top, 9)
 
-            Text("The macOS shortcut takes several keys and only moves\nto the next layout. Kivra lets you choose one directly.")
+            Text("The macOS shortcut takes several keys and only moves\nto the next layout. \(applicationName) lets you choose one directly.")
                 .font(.system(size: 14, design: .rounded))
                 .foregroundStyle(.white.opacity(0.50))
                 .multilineTextAlignment(.center)
@@ -473,8 +477,8 @@ private struct OnboardingView: View {
                 .padding(.top, 22)
 
             Text(model.accessibilityGranted
-                 ? "Kivra can now recognize a quick Shift tap."
-                 : "Kivra uses it only to recognize Shift taps.\nIt never reads or stores what you type.")
+                 ? "\(applicationName) can now recognize a quick Shift tap."
+                 : "\(applicationName) uses it only to recognize Shift taps.\nIt never reads or stores what you type.")
                 .font(.system(size: 14, design: .rounded))
                 .foregroundStyle(.white.opacity(0.50))
                 .multilineTextAlignment(.center)
@@ -525,7 +529,7 @@ private struct OnboardingView: View {
 
             Group {
                 if model.sources.count < 2 {
-                    Text("Kivra needs two enabled keyboard layouts.")
+                    Text("\(applicationName) needs two enabled keyboard layouts.")
                 }
             }
             .font(.system(size: 12, design: .rounded))
@@ -541,7 +545,7 @@ private struct OnboardingView: View {
                     backButton
                 }
                 primaryButton(
-                    model.isSettingsMode ? "Save Changes" : "Start Kivra",
+                    model.isSettingsMode ? "Save Changes" : "Start \(applicationName)",
                     symbol: "checkmark",
                     action: model.finish
                 )

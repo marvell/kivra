@@ -2,9 +2,14 @@ import AppKit
 import Foundation
 
 guard let destinationPath = CommandLine.arguments.dropFirst().first else {
-    fatalError("Usage: create-icon.swift <iconset directory>")
+    fatalError("Usage: create-icon.swift <iconset directory> [stable|dev]")
 }
 let destination = URL(fileURLWithPath: destinationPath)
+let buildVariant = CommandLine.arguments.dropFirst(2).first ?? "stable"
+
+guard ["stable", "dev"].contains(buildVariant) else {
+    fatalError("Unsupported build variant: \(buildVariant)")
+}
 
 let sizes = [16, 32, 128, 256, 512, 1024]
 let fileManager = FileManager.default
@@ -56,6 +61,24 @@ func drawIcon(size: Int) -> Data {
     arrow.close()
     NSColor(calibratedRed: 0.25, green: 0.43, blue: 0.94, alpha: 1).setFill()
     arrow.fill()
+
+    if buildVariant == "dev" {
+        let badge = NSRect(x: 570 * scale, y: 690 * scale, width: 330 * scale, height: 160 * scale)
+        NSColor(calibratedRed: 1.0, green: 0.39, blue: 0.28, alpha: 1).setFill()
+        NSBezierPath(roundedRect: badge, xRadius: 65 * scale, yRadius: 65 * scale).fill()
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 86 * scale, weight: .black),
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: paragraph
+        ]
+        ("DEV" as NSString).draw(
+            in: NSRect(x: badge.minX, y: badge.minY + 27 * scale, width: badge.width, height: badge.height),
+            withAttributes: attributes
+        )
+    }
 
     image.unlockFocus()
     let bitmap = NSBitmapImageRep(data: image.tiffRepresentation!)!

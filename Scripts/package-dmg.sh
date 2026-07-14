@@ -13,6 +13,8 @@ cleanup() {
 trap cleanup EXIT
 
 test -d "$app"
+test "$(/usr/libexec/PlistBuddy -c 'Print :KivraBuildVariant' "$app/Contents/Info.plist")" = "stable"
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.zemliakov.kivra"
 mkdir -p "$(dirname "$output")"
 ditto "$app" "$staging/Kivra.app"
 ln -s /Applications "$staging/Applications"

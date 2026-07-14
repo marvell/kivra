@@ -44,6 +44,43 @@ swift build -c release
 
 The keyboard icon appears in the status bar.
 
+### Local development installation
+
+Build and install the parallel development app:
+
+```bash
+Scripts/install-dev.sh
+```
+
+This creates `/Applications/Kivra Dev.app` with bundle identifier
+`com.zemliakov.kivra.dev`. It has separate preferences and a separate
+Accessibility permission from the stable `Kivra.app`. Its production Sparkle
+configuration is removed, so it cannot update itself to a published release.
+
+Kivra Dev is marked with a `DEV` badge in its app and status bar icons. Stable
+and Dev may remain installed together, but only one can run at a time because
+both monitor the same global Shift events. Quit the running variant before
+opening the other one.
+
+The installer uses an available Apple Development signing identity, falling
+back to Developer ID Application and then to an ad-hoc signature. Keeping the
+same Apple signing identity lets macOS preserve Accessibility approval more
+reliably between rebuilds. You can select one explicitly:
+
+```bash
+SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" Scripts/install-dev.sh
+```
+
+To build without installing:
+
+```bash
+BUILD_VARIANT=dev Scripts/package-app.sh
+```
+
+Set `INSTALL_DIRECTORY` if you prefer another fixed location, such as
+`$HOME/Applications`. Do not move the app between rebuilds if you want macOS to
+retain its privacy permission consistently.
+
 ## Setup
 
 Kivra opens a guided setup on first launch. It explains and requests Accessibility access, then lets you choose a system keyboard input source for **Left Shift** and **Right Shift**. You can reopen the guide later with **Settings…** from the status bar menu.

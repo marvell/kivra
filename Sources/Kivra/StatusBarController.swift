@@ -8,6 +8,7 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     private static let thresholdMillisecondsKey = "tapThresholdMilliseconds"
 
     private let inputSources = InputSourceStore()
+    private let applicationIdentity = ApplicationIdentity.current
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard Bundle.main.bundleURL.pathExtension == "app",
               Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
@@ -165,7 +166,11 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
         }
 
         menu.addItem(.separator())
-        let quitItem = menu.addItem(withTitle: "Quit Kivra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quitItem = menu.addItem(
+            withTitle: "Quit \(applicationIdentity.displayName)",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
         quitItem.target = NSApp
         statusItem.menu = menu
     }
@@ -222,8 +227,9 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(
             systemSymbolName: "keyboard",
-            accessibilityDescription: "Kivra"
+            accessibilityDescription: applicationIdentity.displayName
         )
+        item.button?.title = applicationIdentity.isDevelopment ? " DEV" : ""
         statusItem = item
 
         if AccessibilityPermission.isGranted {
