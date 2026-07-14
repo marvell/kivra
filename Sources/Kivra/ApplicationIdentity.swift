@@ -17,8 +17,9 @@ struct ApplicationIdentity: Equatable {
 
     init(infoDictionary: [String: Any]) {
         displayName = infoDictionary["CFBundleDisplayName"] as? String ?? "Kivra"
-        variant = Variant(
-            rawValue: infoDictionary["KivraBuildVariant"] as? String ?? Variant.stable.rawValue
-        ) ?? .stable
+        variant =
+            Variant(
+                rawValue: infoDictionary["KivraBuildVariant"] as? String ?? Variant.stable.rawValue
+            ) ?? .stable
     }
 }

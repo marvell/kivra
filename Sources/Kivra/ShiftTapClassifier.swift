@@ -120,7 +120,8 @@ struct ShiftTapClassifier: Sendable {
         }
 
         let startedAt = state.pressedAt
-        let isValid = !state.isInvalid && timestamp >= startedAt
+        let isValid =
+            !state.isInvalid && timestamp >= startedAt
             && timestamp - startedAt <= maximumDuration
         state = State()
         return isValid

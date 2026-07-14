@@ -92,6 +92,10 @@ jobs:
           test -n "$identity"
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
 
+      - name: Run linters
+        if: steps.release-state.outputs.value == 'new'
+        run: Scripts/lint.sh
+
       - name: Test
         if: steps.release-state.outputs.value == 'new'
         run: swift test

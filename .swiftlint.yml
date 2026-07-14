@@ -1,0 +1,39 @@
+disabled_rules:
+  - opening_brace
+  - trailing_comma
+
+included:
+  - Sources
+  - Tests
+  - Scripts
+  - Package.swift
+
+excluded:
+  - .build
+  - dist
+
+strict: true
+check_for_updates: false
+
+line_length:
+  warning: 120
+  error: 140
+  ignores_interpolated_strings: true
+  ignores_multiline_strings: true
+
+file_length:
+  warning: 1000
+  error: 1200
+
+type_body_length:
+  warning: 600
+  error: 800
+
+function_body_length:
+  warning: 100
+  error: 150
+
+identifier_name:
+  excluded:
+    - "^id$"
+    - "^y$"

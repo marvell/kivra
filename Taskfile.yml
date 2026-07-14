@@ -21,6 +21,16 @@ tasks:
     cmds:
       - swift test
 
+  format:
+    desc: Format Swift source files
+    cmds:
+      - swift format --in-place --recursive --parallel Sources Tests Scripts Package.swift
+
+  lint:
+    desc: Run Swift formatting and lint checks
+    cmds:
+      - Scripts/lint.sh
+
   reset-onboarding:
     desc: Reset Kivra and Kivra Dev onboarding preferences (quit both first)
     cmds:

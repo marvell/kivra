@@ -45,14 +45,16 @@ final class ShiftEventMonitor {
     private func installTap() {
         let eventMask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
         let pointer = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: Self.callback,
-            userInfo: pointer
-        ) else {
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: CGEventMask(eventMask),
+                callback: Self.callback,
+                userInfo: pointer
+            )
+        else {
             logger.error("Unable to create event tap")
             return
         }
@@ -101,7 +103,7 @@ final class ShiftEventMonitor {
                     eventFlags: eventFlags,
                     previouslyPressed: classifier.isPressed(side)
                 )
-                if case let .select(selectedSide) = classifier.shiftChanged(
+                if case .select(let selectedSide) = classifier.shiftChanged(
                     side: side,
                     isDown: isDown,
                     timestamp: timestamp

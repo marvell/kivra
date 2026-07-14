@@ -53,7 +53,8 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         hostingView.layer?.masksToBounds = true
 
         let applicationName = ApplicationIdentity.current.displayName
-        window.title = mode == .firstLaunch
+        window.title =
+            mode == .firstLaunch
             ? "Welcome to \(applicationName)"
             : "\(applicationName) Settings"
         window.isMovableByWindowBackground = true
@@ -122,8 +123,8 @@ final class OnboardingModel: ObservableObject {
     @Published var selectedLeftID: String {
         didSet {
             guard selectedLeftID != oldValue,
-                  selectedRightID == selectedLeftID,
-                  let alternativeID = sources.first(where: { $0.id != selectedLeftID })?.id
+                selectedRightID == selectedLeftID,
+                let alternativeID = sources.first(where: { $0.id != selectedLeftID })?.id
             else {
                 return
             }
@@ -168,7 +169,8 @@ final class OnboardingModel: ObservableObject {
         self.thresholdMilliseconds = Self.normalizedThreshold(thresholdMilliseconds)
         self.launchAtLogin = launchAtLogin
         launchAtLoginState = initialLaunchAtLoginState
-        isLaunchAtLoginEnabled = mode == .firstLaunch
+        isLaunchAtLoginEnabled =
+            mode == .firstLaunch
             ? true
             : initialLaunchAtLoginState.isEnabled
         if mode == .settings {
@@ -185,8 +187,7 @@ final class OnboardingModel: ObservableObject {
     }
 
     var canConfigureLayouts: Bool {
-        !selectedLeftID.isEmpty && !selectedRightID.isEmpty &&
-            selectedLeftID != selectedRightID
+        !selectedLeftID.isEmpty && !selectedRightID.isEmpty && selectedLeftID != selectedRightID
     }
 
     var isLaunchAtLoginAvailable: Bool {
@@ -322,13 +323,15 @@ final class OnboardingModel: ObservableObject {
         leftID: String?,
         rightID: String?
     ) -> (left: String, right: String) {
-        let left = leftID.flatMap { id in
-            sources.contains { $0.id == id } ? id : nil
-        } ?? sources.first?.id ?? ""
+        let left =
+            leftID.flatMap { id in
+                sources.contains { $0.id == id } ? id : nil
+            } ?? sources.first?.id ?? ""
         let fallbackRight = sources.first { $0.id != left }?.id ?? left
-        let right = rightID.flatMap { id in
-            sources.contains { $0.id == id && id != left } ? id : nil
-        } ?? fallbackRight
+        let right =
+            rightID.flatMap { id in
+                sources.contains { $0.id == id && id != left } ? id : nil
+            } ?? fallbackRight
         return (left, right)
     }
 
@@ -349,9 +352,10 @@ private struct OnboardingView: View {
     private let panel = Color.white.opacity(0.055)
     private let border = Color.white.opacity(0.10)
     private let applicationName = ApplicationIdentity.current.displayName
-    private let appVersion = Bundle.main.object(
-        forInfoDictionaryKey: "CFBundleShortVersionString"
-    ) as? String
+    private let appVersion =
+        Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
 
     var body: some View {
         ZStack {
@@ -480,12 +484,14 @@ private struct OnboardingView: View {
                 .tracking(-0.7)
                 .padding(.top, 9)
 
-            Text("The macOS shortcut takes several keys and only moves\nto the next layout. \(applicationName) lets you choose one directly.")
-                .font(.system(size: 14, design: .rounded))
-                .foregroundStyle(.white.opacity(0.50))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .padding(.top, 11)
+            Text(
+                "The macOS shortcut takes several keys and only moves\nto the next layout. \(applicationName) lets you choose one directly."
+            )
+            .font(.system(size: 14, design: .rounded))
+            .foregroundStyle(.white.opacity(0.50))
+            .multilineTextAlignment(.center)
+            .lineSpacing(4)
+            .padding(.top, 11)
 
             HStack(spacing: 11) {
                 languageKey(side: "LEFT SHIFT", language: model.selectedLeftName)
@@ -519,14 +525,16 @@ private struct OnboardingView: View {
                 .tracking(-0.5)
                 .padding(.top, 22)
 
-            Text(model.accessibilityGranted
-                 ? "\(applicationName) can now recognize a quick Shift tap."
-                 : "\(applicationName) uses it only to recognize Shift taps.\nIt never reads or stores what you type.")
-                .font(.system(size: 14, design: .rounded))
-                .foregroundStyle(.white.opacity(0.50))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .padding(.top, 11)
+            Text(
+                model.accessibilityGranted
+                    ? "\(applicationName) can now recognize a quick Shift tap."
+                    : "\(applicationName) uses it only to recognize Shift taps.\nIt never reads or stores what you type."
+            )
+            .font(.system(size: 14, design: .rounded))
+            .foregroundStyle(.white.opacity(0.50))
+            .multilineTextAlignment(.center)
+            .lineSpacing(4)
+            .padding(.top, 11)
 
             Spacer()
 
@@ -596,9 +604,9 @@ private struct OnboardingView: View {
                     symbol: "checkmark",
                     action: model.finish
                 )
-                    .disabled(!model.canConfigureLayouts)
-                    .opacity(model.canConfigureLayouts ? 1 : 0.42)
-                    .keyboardShortcut(.defaultAction)
+                .disabled(!model.canConfigureLayouts)
+                .opacity(model.canConfigureLayouts ? 1 : 0.42)
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.bottom, 16)
         }

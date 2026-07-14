@@ -36,6 +36,8 @@ shortcut for common development work:
 task run
 task build
 task test
+task format
+task lint
 task install-dev
 ```
 
@@ -108,7 +110,8 @@ macOS and the focused application control the final input-source application tim
 ## Test
 
 ```bash
-swift test
+task lint
+task test
 ```
 
 ## Release

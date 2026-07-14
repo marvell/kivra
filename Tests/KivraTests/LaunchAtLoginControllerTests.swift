@@ -1,5 +1,6 @@
 import ServiceManagement
 import XCTest
+
 @testable import Kivra
 
 final class LaunchAtLoginControllerTests: XCTestCase {

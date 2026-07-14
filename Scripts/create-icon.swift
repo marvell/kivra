@@ -22,7 +22,9 @@ func drawIcon(size: Int) -> Data {
     let scale = CGFloat(size) / 1024
     let bounds = NSRect(x: 0, y: 0, width: size, height: size)
     NSColor(calibratedRed: 0.09, green: 0.12, blue: 0.25, alpha: 1).setFill()
-    NSBezierPath(roundedRect: bounds.insetBy(dx: 28 * scale, dy: 28 * scale), xRadius: 220 * scale, yRadius: 220 * scale).fill()
+    NSBezierPath(
+        roundedRect: bounds.insetBy(dx: 28 * scale, dy: 28 * scale), xRadius: 220 * scale, yRadius: 220 * scale
+    ).fill()
 
     let keyboard = NSRect(x: 126 * scale, y: 264 * scale, width: 772 * scale, height: 500 * scale)
     NSColor(calibratedRed: 0.25, green: 0.43, blue: 0.94, alpha: 1).setFill()
@@ -72,7 +74,7 @@ func drawIcon(size: Int) -> Data {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 86 * scale, weight: .black),
             .foregroundColor: NSColor.white,
-            .paragraphStyle: paragraph
+            .paragraphStyle: paragraph,
         ]
         ("DEV" as NSString).draw(
             in: NSRect(x: badge.minX, y: badge.minY + 27 * scale, width: badge.width, height: badge.height),

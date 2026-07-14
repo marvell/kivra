@@ -11,6 +11,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
+      - name: Run linters
+        run: Scripts/lint.sh
       - name: Run tests
         run: swift test
       - name: Build app bundle

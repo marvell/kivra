@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import Kivra
 
 final class OnboardingModelTests: XCTestCase {

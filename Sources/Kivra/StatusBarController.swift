@@ -12,7 +12,7 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     private let applicationIdentity = ApplicationIdentity.current
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard Bundle.main.bundleURL.pathExtension == "app",
-              Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
+            Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
         else {
             return nil
         }
@@ -48,8 +48,8 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
 
         let defaults = UserDefaults.standard
         if defaults.object(forKey: Self.onboardingCompletedKey) == nil,
-           inputSources.configuredSource(for: .left) != nil,
-           inputSources.configuredSource(for: .right) != nil
+            inputSources.configuredSource(for: .left) != nil,
+            inputSources.configuredSource(for: .right) != nil
         {
             defaults.set(true, forKey: Self.onboardingCompletedKey)
         }
@@ -127,7 +127,8 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
         }
         let menu = NSMenu()
         let isTrusted = AccessibilityPermission.isGranted
-        let state = isTrusted
+        let state =
+            isTrusted
             ? (monitor.isRunning ? "Monitoring active" : "Monitoring paused")
             : "Accessibility permission required"
         let stateItem = menu.addItem(withTitle: state, action: nil, keyEquivalent: "")

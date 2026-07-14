@@ -1,12 +1,14 @@
 import Foundation
 import XCTest
+
 @testable import Kivra
 
 final class ApplicationInstanceLockTests: XCTestCase {
     func testOnlyOneInstanceCanHoldLock() {
         let testDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kivra-test-\(UUID().uuidString)", isDirectory: true)
-        let lockURL = testDirectory
+        let lockURL =
+            testDirectory
             .appendingPathComponent("nested", isDirectory: true)
             .appendingPathComponent("instance.lock")
         var firstLock = try? ApplicationInstanceLock(fileURL: lockURL)

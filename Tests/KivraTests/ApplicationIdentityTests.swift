@@ -1,11 +1,12 @@
 import XCTest
+
 @testable import Kivra
 
 final class ApplicationIdentityTests: XCTestCase {
     func testStableIdentityUsesProductionConfiguration() {
         let identity = ApplicationIdentity(infoDictionary: [
             "CFBundleDisplayName": "Kivra",
-            "KivraBuildVariant": "stable"
+            "KivraBuildVariant": "stable",
         ])
 
         XCTAssertEqual(identity.displayName, "Kivra")
@@ -16,7 +17,7 @@ final class ApplicationIdentityTests: XCTestCase {
     func testDevelopmentIdentityIsSeparateAndVisible() {
         let identity = ApplicationIdentity(infoDictionary: [
             "CFBundleDisplayName": "Kivra Dev",
-            "KivraBuildVariant": "dev"
+            "KivraBuildVariant": "dev",
         ])
 
         XCTAssertEqual(identity.displayName, "Kivra Dev")

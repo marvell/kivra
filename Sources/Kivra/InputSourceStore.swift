@@ -36,11 +36,12 @@ final class InputSourceStore {
     }
 
     func refresh() {
-        let properties: CFDictionary = [
-            kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource!,
-            kTISPropertyInputSourceIsEnabled: true,
-            kTISPropertyInputSourceIsSelectCapable: true
-        ] as CFDictionary
+        let properties: CFDictionary =
+            [
+                kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource!,
+                kTISPropertyInputSourceIsEnabled: true,
+                kTISPropertyInputSourceIsSelectCapable: true,
+            ] as CFDictionary
         let inputSources = TISCreateInputSourceList(properties, false).takeRetainedValue() as? [TISInputSource] ?? []
         let updatedSources = Dictionary(
             uniqueKeysWithValues: inputSources.compactMap { source -> (String, TISInputSource)? in
