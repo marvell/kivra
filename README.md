@@ -29,7 +29,17 @@ It uses the [Sparkle](https://sparkle-project.org/) update framework; its licens
 
 ## Develop
 
-From the project directory:
+If [Task](https://taskfile.dev/) is installed, its commands are a recommended
+shortcut for common development work:
+
+```bash
+task run
+task build
+task test
+task install-dev
+```
+
+You can also run the underlying commands directly. From the project directory:
 
 ```bash
 swift run

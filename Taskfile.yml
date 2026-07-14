@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  run:
+    desc: Run Kivra for development
+    cmds:
+      - swift run
+
+  build:
+    desc: Build the release executable
+    cmds:
+      - swift build -c release
+
+  test:
+    desc: Run tests
+    cmds:
+      - swift test
+
+  install-dev:
+    desc: Build and install the development app
+    cmds:
+      - Scripts/install-dev.sh
