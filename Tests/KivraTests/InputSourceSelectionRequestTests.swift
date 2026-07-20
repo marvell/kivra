@@ -3,66 +3,54 @@ import XCTest
 
 @testable import Kivra
 
-final class InputSourceSelectionRequestTests: XCTestCase {
-    func testMatchingSourceCompletesRequest() {
-        let request = InputSourceSelectionRequest()
-
-        XCTAssertTrue(request.arm(targetID: "target"))
-        XCTAssertTrue(request.confirm(sourceID: "target"))
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .selected)
-    }
-
-    func testUnrelatedSourceDoesNotCompleteRequest() {
-        let request = InputSourceSelectionRequest()
-
-        XCTAssertTrue(request.arm(targetID: "target"))
-        XCTAssertFalse(request.confirm(sourceID: "other"))
-        request.complete(with: .failed)
-
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .failed)
-    }
-
+final class SelectionGateTests: XCTestCase {
     func testCompletionBeforeWaitIsNotMissed() {
-        let request = InputSourceSelectionRequest()
+        let gate = SelectionGate()
 
-        request.complete(with: .alreadySelected)
+        XCTAssertTrue(gate.finish())
 
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .alreadySelected)
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
     }
 
-    func testTimeoutBeforeSelectionCancelsRequest() {
-        let request = InputSourceSelectionRequest()
+    func testTimeoutBeforeStartPreventsLateStart() {
+        let gate = SelectionGate()
 
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .timedOutBeforeSelection)
-        XCTAssertFalse(request.isPending)
-        XCTAssertFalse(request.arm(targetID: "target"))
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutBeforeStart)
+        XCTAssertFalse(gate.isPending)
+        XCTAssertFalse(gate.start())
     }
 
-    func testCancellationBeforeSelectionPreventsArming() {
-        let request = InputSourceSelectionRequest()
+    func testTimeoutAfterStartIsDistinguished() {
+        let gate = SelectionGate()
 
-        request.complete(with: .cancelled)
+        XCTAssertTrue(gate.start())
 
-        XCTAssertFalse(request.isPending)
-        XCTAssertFalse(request.arm(targetID: "target"))
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .cancelled)
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
     }
 
-    func testTimeoutAfterSelectionStartsIsDistinguished() {
-        let request = InputSourceSelectionRequest()
+    func testGateStartsOnlyOnce() {
+        let gate = SelectionGate()
 
-        XCTAssertTrue(request.arm(targetID: "target"))
-
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .timedOutAfterSelection)
+        XCTAssertTrue(gate.start())
+        XCTAssertFalse(gate.start())
     }
 
-    func testLateNotificationCannotOverrideCompletion() {
-        let request = InputSourceSelectionRequest()
+    func testFinishAfterStartCompletesGate() {
+        let gate = SelectionGate()
 
-        XCTAssertTrue(request.arm(targetID: "target"))
-        request.complete(with: .failed)
+        XCTAssertTrue(gate.start())
+        XCTAssertTrue(gate.finish())
 
-        XCTAssertFalse(request.confirm(sourceID: "target"))
-        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .failed)
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
+    }
+
+    func testLateFinishCannotOverrideTimeout() {
+        let gate = SelectionGate()
+
+        XCTAssertTrue(gate.start())
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
+
+        XCTAssertFalse(gate.finish())
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
     }
 }

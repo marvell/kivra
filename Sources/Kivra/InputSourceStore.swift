@@ -12,17 +12,20 @@ final class InputSourceStore {
     static let leftSourceKey = "leftInputSourceID"
     static let rightSourceKey = "rightInputSourceID"
 
-    private struct SelectionTarget {
-        let id: String
-        let source: TISInputSource
+    private final class PendingSelection {
+        let targetID: String
+        weak var gate: SelectionGate?
+
+        init(targetID: String, gate: SelectionGate) {
+            self.targetID = targetID
+            self.gate = gate
+        }
     }
 
     private var sourcesByID: [String: TISInputSource] = [:]
     private var leftID: String?
     private var rightID: String?
-    private var leftTarget: SelectionTarget?
-    private var rightTarget: SelectionTarget?
-    private weak var pendingSelectionRequest: InputSourceSelectionRequest?
+    private var pendingSelection: PendingSelection?
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
 
     init() {
@@ -54,11 +57,10 @@ final class InputSourceStore {
         )
 
         sourcesByID = updatedSources
-        rebuildSelectionTargets()
     }
 
-    func select(for side: ShiftSide, request: InputSourceSelectionRequest) {
-        guard request.isPending else {
+    func select(for side: ShiftSide, gate: SelectionGate) {
+        guard gate.isPending else {
             return
         }
 
@@ -72,27 +74,27 @@ final class InputSourceStore {
 
         guard let target else {
             logger.error("Configured input source is unavailable")
-            request.complete(with: .failed)
+            gate.finish()
             return
         }
 
         if Self.currentSourceID() == target.id {
-            request.complete(with: .alreadySelected)
+            gate.finish()
             return
         }
 
-        guard request.arm(targetID: target.id) else {
+        guard gate.start() else {
             return
         }
-        pendingSelectionRequest = request
+        pendingSelection = PendingSelection(targetID: target.id, gate: gate)
 
         var status = TISSelectInputSource(target.source)
         if status == noErr {
             return
         }
 
-        guard request.isPending else {
-            clearPendingRequest(ifMatching: request)
+        guard gate.isPending else {
+            clearPendingSelection(ifMatching: gate)
             return
         }
 
@@ -100,26 +102,37 @@ final class InputSourceStore {
         // retained TISInputSource snapshot and retry once instead of dropping
         // the user's switch.
         refresh()
+        guard gate.isPending else {
+            clearPendingSelection(ifMatching: gate)
+            return
+        }
         if let refreshedTarget = selectionTarget(for: side) {
             status = TISSelectInputSource(refreshedTarget.source)
         }
         if status != noErr {
             logger.error("Input source selection failed with status \(status), id: \(target.id, privacy: .public)")
-            request.complete(with: .failed)
-            clearPendingRequest(ifMatching: request)
+            gate.finish()
+            clearPendingSelection(ifMatching: gate)
         }
     }
 
     func selectedSourceDidChange() {
-        guard
-            let request = pendingSelectionRequest,
-            let sourceID = Self.currentSourceID()
-        else {
+        guard let pendingSelection else {
+            return
+        }
+        guard let gate = pendingSelection.gate else {
+            self.pendingSelection = nil
+            return
+        }
+        guard let sourceID = Self.currentSourceID() else {
             return
         }
 
-        if request.confirm(sourceID: sourceID) || !request.isPending {
-            clearPendingRequest(ifMatching: request)
+        if sourceID == pendingSelection.targetID {
+            gate.finish()
+            self.pendingSelection = nil
+        } else if !gate.isPending {
+            self.pendingSelection = nil
         }
     }
 
@@ -136,7 +149,6 @@ final class InputSourceStore {
         case .right: rightID = id
         }
         UserDefaults.standard.set(id, forKey: Self.preferenceKey(for: side))
-        rebuildSelectionTargets()
     }
 
     func configuredSourceName(for side: ShiftSide) -> String? {
@@ -147,25 +159,19 @@ final class InputSourceStore {
         return sourcesByID[id].flatMap(Self.name(for:))
     }
 
-    private func selectionTarget(for side: ShiftSide) -> SelectionTarget? {
-        switch side {
-        case .left: leftTarget
-        case .right: rightTarget
+    private func selectionTarget(for side: ShiftSide) -> (id: String, source: TISInputSource)? {
+        guard
+            let id = configuredSource(for: side),
+            let source = sourcesByID[id]
+        else {
+            return nil
         }
+        return (id, source)
     }
 
-    private func rebuildSelectionTargets() {
-        leftTarget = leftID.flatMap { id in
-            sourcesByID[id].map { SelectionTarget(id: id, source: $0) }
-        }
-        rightTarget = rightID.flatMap { id in
-            sourcesByID[id].map { SelectionTarget(id: id, source: $0) }
-        }
-    }
-
-    private func clearPendingRequest(ifMatching request: InputSourceSelectionRequest) {
-        if pendingSelectionRequest === request {
-            pendingSelectionRequest = nil
+    private func clearPendingSelection(ifMatching gate: SelectionGate) {
+        if pendingSelection?.gate === gate {
+            pendingSelection = nil
         }
     }
 

@@ -9,54 +9,51 @@ final class ShiftTapClassifierTests: XCTestCase {
     func testShortLeftTapSelectsLeftSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        XCTAssertEqual(classifier.shiftChanged(side: .left, isDown: true, timestamp: 0), .none)
+        XCTAssertNil(classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: false)))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 249 * millisecond),
-            .select(.left)
+            classifier.process(.shiftReleased(.left, timestamp: 249 * millisecond, isChorded: false)),
+            .left
         )
     }
 
     func testTapAtExactThresholdSelectsSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 10 * millisecond)
+        _ = classifier.process(.shiftPressed(.right, timestamp: 10 * millisecond, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .right, isDown: false, timestamp: 260 * millisecond),
-            .select(.right)
+            classifier.process(.shiftReleased(.right, timestamp: 260 * millisecond, isChorded: false)),
+            .right
         )
     }
 
     func testAlternatingShiftEventsSelectSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        let firstIsDown = !classifier.isPressed(.left)
-        XCTAssertEqual(classifier.shiftChanged(side: .left, isDown: firstIsDown, timestamp: 0), .none)
-
-        let secondIsDown = !classifier.isPressed(.left)
+        XCTAssertNil(classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: false)))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: secondIsDown, timestamp: 100 * millisecond),
-            .select(.left)
+            classifier.process(.shiftReleased(.left, timestamp: 100 * millisecond, isChorded: false)),
+            .left
         )
     }
 
     func testLongTapDoesNotSelectSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 0)
+        _ = classifier.process(.shiftPressed(.right, timestamp: 0, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .right, isDown: false, timestamp: 251 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.right, timestamp: 251 * millisecond, isChorded: false)),
+            nil
         )
     }
 
     func testKeyPressedDuringShiftDoesNotSelectSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .left, isDown: true, timestamp: 0)
-        classifier.otherKeyChanged()
+        _ = classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: false))
+        _ = classifier.process(.otherKey)
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 100 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 100 * millisecond, isChorded: false)),
+            nil
         )
     }
 
@@ -64,76 +61,66 @@ final class ShiftTapClassifierTests: XCTestCase {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
         XCTAssertEqual(
-            classifier.shiftChanged(
-                side: .left,
-                isDown: true,
-                timestamp: 0,
-                hasOtherModifiers: true
-            ),
-            .none
+            classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: true)),
+            nil
         )
         XCTAssertEqual(
-            classifier.shiftChanged(
-                side: .left,
-                isDown: false,
-                timestamp: 100 * millisecond,
-                hasOtherModifiers: true
-            ),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 100 * millisecond, isChorded: false)),
+            nil
         )
     }
 
     func testInvalidTapDoesNotPoisonNextTap() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .left, isDown: true, timestamp: 0)
-        classifier.otherKeyChanged()
+        _ = classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: false))
+        _ = classifier.process(.otherKey)
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 50 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 50 * millisecond, isChorded: false)),
+            nil
         )
 
-        _ = classifier.shiftChanged(side: .left, isDown: true, timestamp: 100 * millisecond)
+        _ = classifier.process(.shiftPressed(.left, timestamp: 100 * millisecond, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 150 * millisecond),
-            .select(.left)
+            classifier.process(.shiftReleased(.left, timestamp: 150 * millisecond, isChorded: false)),
+            .left
         )
     }
 
     func testOverlappingShiftsDoNotSelectEitherSource() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .left, isDown: true, timestamp: 0)
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 10 * millisecond)
+        _ = classifier.process(.shiftPressed(.left, timestamp: 0, isChorded: false))
+        _ = classifier.process(.shiftPressed(.right, timestamp: 10 * millisecond, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .right, isDown: false, timestamp: 20 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.right, timestamp: 20 * millisecond, isChorded: false)),
+            nil
         )
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 30 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 30 * millisecond, isChorded: false)),
+            nil
         )
     }
 
     func testResetDiscardsPendingTap() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 0)
+        _ = classifier.process(.shiftPressed(.right, timestamp: 0, isChorded: false))
         classifier.reset()
         XCTAssertEqual(
-            classifier.shiftChanged(side: .right, isDown: false, timestamp: 50 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.right, timestamp: 50 * millisecond, isChorded: false)),
+            nil
         )
     }
 
     func testDuplicateDownKeepsOriginalTimestamp() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 0)
-        _ = classifier.shiftChanged(side: .right, isDown: true, timestamp: 200 * millisecond)
+        _ = classifier.process(.shiftPressed(.right, timestamp: 0, isChorded: false))
+        _ = classifier.process(.shiftPressed(.right, timestamp: 200 * millisecond, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .right, isDown: false, timestamp: 300 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.right, timestamp: 300 * millisecond, isChorded: false)),
+            nil
         )
     }
 
@@ -141,8 +128,8 @@ final class ShiftTapClassifierTests: XCTestCase {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 10 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 10 * millisecond, isChorded: false)),
+            nil
         )
         XCTAssertFalse(classifier.isPressed(.left))
     }
@@ -150,10 +137,10 @@ final class ShiftTapClassifierTests: XCTestCase {
     func testTimestampMovingBackwardsClearsTap() {
         var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
 
-        _ = classifier.shiftChanged(side: .left, isDown: true, timestamp: 100 * millisecond)
+        _ = classifier.process(.shiftPressed(.left, timestamp: 100 * millisecond, isChorded: false))
         XCTAssertEqual(
-            classifier.shiftChanged(side: .left, isDown: false, timestamp: 99 * millisecond),
-            .none
+            classifier.process(.shiftReleased(.left, timestamp: 99 * millisecond, isChorded: false)),
+            nil
         )
         XCTAssertFalse(classifier.isPressed(.left))
     }
@@ -165,7 +152,7 @@ final class ShiftTapClassifierTests: XCTestCase {
     }
 
     func testDeviceFlagsTrackEachShiftIndependently() {
-        let shiftFlag: UInt64 = 0x0002_0000
+        let shiftFlag = CGEventFlags.maskShift.rawValue
 
         XCTAssertTrue(ShiftSide.left.isPressed(eventFlags: shiftFlag | 0x02, previouslyPressed: false))
         XCTAssertTrue(ShiftSide.right.isPressed(eventFlags: shiftFlag | 0x04, previouslyPressed: false))
@@ -175,7 +162,7 @@ final class ShiftTapClassifierTests: XCTestCase {
     }
 
     func testSynthesizedShiftEventFallsBackToSequenceState() {
-        let shiftFlag: UInt64 = 0x0002_0000
+        let shiftFlag = CGEventFlags.maskShift.rawValue
 
         XCTAssertTrue(ShiftSide.left.isPressed(eventFlags: shiftFlag, previouslyPressed: false))
         XCTAssertFalse(ShiftSide.left.isPressed(eventFlags: shiftFlag, previouslyPressed: true))

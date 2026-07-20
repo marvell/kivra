@@ -11,26 +11,42 @@ final class ShiftEventMonitor: @unchecked Sendable {
         .maskSecondaryFn,
     ]
 
-    private struct StopState {
-        let tap: CFMachPort?
-        let runLoop: CFRunLoop?
-        let request: InputSourceSelectionRequest?
+    private final class StartToken: @unchecked Sendable {}
+
+    private final class TapSession {
+        let tap: CFMachPort
+        let runLoop: CFRunLoop
+
+        init(tap: CFMachPort, runLoop: CFRunLoop) {
+            self.tap = tap
+            self.runLoop = runLoop
+        }
+    }
+
+    private enum Lifecycle {
+        case stopped
+        case starting(StartToken)
+        case running(TapSession)
+    }
+
+    private struct State {
+        var classifier: ShiftTapClassifier
+        var lifecycle: Lifecycle = .stopped
+        var pendingSelectionGate: SelectionGate?
     }
 
     private let inputSources: InputSourceStore
     private let onRunningStateChanged: @MainActor @Sendable () -> Void
     private let logger = Logger(subsystem: "com.kivra.app", category: "event-tap")
     private let stateLock = NSLock()
-    private var classifier: ShiftTapClassifier
-    private var tap: CFMachPort?
-    private var runLoop: CFRunLoop?
-    private var nextStartGeneration: UInt64 = 0
-    private var pendingStartGeneration: UInt64?
-    private var pendingSelectionRequest: InputSourceSelectionRequest?
+    private var state: State
 
     var isRunning: Bool {
         stateLock.withLock {
-            pendingStartGeneration != nil || tap != nil
+            if case .stopped = state.lifecycle {
+                return false
+            }
+            return true
         }
     }
 
@@ -46,25 +62,25 @@ final class ShiftEventMonitor: @unchecked Sendable {
     ) {
         self.inputSources = inputSources
         self.onRunningStateChanged = onRunningStateChanged
-        classifier = ShiftTapClassifier(maximumDurationMilliseconds: thresholdMilliseconds)
+        state = State(classifier: ShiftTapClassifier(maximumDurationMilliseconds: thresholdMilliseconds))
     }
 
     @MainActor
     func start() {
-        let generation = stateLock.withLock { () -> UInt64? in
-            guard pendingStartGeneration == nil, tap == nil else {
+        let token = stateLock.withLock { () -> StartToken? in
+            guard case .stopped = state.lifecycle else {
                 return nil
             }
-            nextStartGeneration &+= 1
-            pendingStartGeneration = nextStartGeneration
-            return nextStartGeneration
+            let token = StartToken()
+            state.lifecycle = .starting(token)
+            return token
         }
-        guard let generation else {
+        guard let token else {
             return
         }
 
         let thread = Thread { [weak self] in
-            self?.installTap(generation: generation)
+            self?.installTap(token: token)
         }
         thread.name = "com.kivra.event-tap"
         thread.qualityOfService = .userInteractive
@@ -73,40 +89,40 @@ final class ShiftEventMonitor: @unchecked Sendable {
 
     @MainActor
     func stop() {
-        let state = stateLock.withLock {
-            let state = StopState(
-                tap: tap,
-                runLoop: runLoop,
-                request: pendingSelectionRequest
-            )
-            pendingStartGeneration = nil
-            self.tap = nil
-            self.runLoop = nil
-            pendingSelectionRequest = nil
-            classifier.reset()
-            return state
+        let (session, gate) = stateLock.withLock { () -> (TapSession?, SelectionGate?) in
+            let session: TapSession?
+            if case .running(let currentSession) = state.lifecycle {
+                session = currentSession
+            } else {
+                session = nil
+            }
+            state.lifecycle = .stopped
+            state.classifier.reset()
+            let gate = state.pendingSelectionGate
+            state.pendingSelectionGate = nil
+            return (session, gate)
         }
 
-        state.request?.complete(with: .cancelled)
-        if let tap = state.tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
+        gate?.finish()
+        if let session {
+            CGEvent.tapEnable(tap: session.tap, enable: false)
         }
-        if let runLoop = state.runLoop {
-            CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes.rawValue) {
-                CFRunLoopStop(runLoop)
+        if let session {
+            CFRunLoopPerformBlock(session.runLoop, CFRunLoopMode.commonModes.rawValue) {
+                CFRunLoopStop(session.runLoop)
             }
-            CFRunLoopWakeUp(runLoop)
+            CFRunLoopWakeUp(session.runLoop)
         }
     }
 
     @MainActor
     func updateThreshold(milliseconds: Int) {
         stateLock.withLock {
-            classifier = ShiftTapClassifier(maximumDurationMilliseconds: milliseconds)
+            state.classifier = ShiftTapClassifier(maximumDurationMilliseconds: milliseconds)
         }
     }
 
-    private func installTap(generation: UInt64) {
+    private func installTap(token: StartToken) {
         let eventMask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
         let pointer = Unmanaged.passUnretained(self).toOpaque()
         guard
@@ -119,13 +135,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
                 userInfo: pointer
             )
         else {
-            let didStop = stateLock.withLock {
-                if pendingStartGeneration == generation {
-                    pendingStartGeneration = nil
-                    return true
-                }
-                return false
-            }
+            let didStop = stopStarting(token)
             logger.error("Unable to create event tap")
             if didStop {
                 notifyRunningStateChanged()
@@ -134,14 +144,19 @@ final class ShiftEventMonitor: @unchecked Sendable {
         }
 
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        let currentRunLoop = CFRunLoopGetCurrent()
+        guard let currentRunLoop = CFRunLoopGetCurrent() else {
+            CFMachPortInvalidate(tap)
+            if stopStarting(token) {
+                notifyRunningStateChanged()
+            }
+            return
+        }
+        let session = TapSession(tap: tap, runLoop: currentRunLoop)
         let shouldInstall = stateLock.withLock {
-            guard pendingStartGeneration == generation else {
+            guard case .starting(let pendingToken) = state.lifecycle, pendingToken === token else {
                 return false
             }
-            pendingStartGeneration = nil
-            self.tap = tap
-            runLoop = currentRunLoop
+            state.lifecycle = .running(session)
             return true
         }
         guard shouldInstall else {
@@ -156,15 +171,24 @@ final class ShiftEventMonitor: @unchecked Sendable {
         CFMachPortInvalidate(tap)
 
         let didStop = stateLock.withLock {
-            if runLoop === currentRunLoop {
-                self.tap = nil
-                runLoop = nil
+            if case .running(let activeSession) = state.lifecycle, activeSession === session {
+                state.lifecycle = .stopped
                 return true
             }
             return false
         }
         if didStop {
             notifyRunningStateChanged()
+        }
+    }
+
+    private func stopStarting(_ token: StartToken) -> Bool {
+        stateLock.withLock {
+            guard case .starting(let pendingToken) = state.lifecycle, pendingToken === token else {
+                return false
+            }
+            state.lifecycle = .stopped
+            return true
         }
     }
 
@@ -184,43 +208,49 @@ final class ShiftEventMonitor: @unchecked Sendable {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            let currentTap: CFMachPort? = stateLock.withLock {
-                classifier.reset()
-                return self.tap
+            let currentTap = stateLock.withLock { () -> CFMachPort? in
+                state.classifier.reset()
+                guard case .running(let session) = state.lifecycle else {
+                    return nil
+                }
+                CGEvent.tapEnable(tap: session.tap, enable: true)
+                return session.tap
             }
-            if let currentTap {
-                CGEvent.tapEnable(tap: currentTap, enable: true)
+            if currentTap != nil {
+                logger.warning("Event tap was disabled and re-enabled")
             }
-            logger.warning("Event tap was disabled and re-enabled")
             return Unmanaged.passUnretained(event)
         }
-
-        let timestamp = event.timestamp
-        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-        let eventFlags = event.flags
-        let hasOtherModifiers = Self.hasChordModifier(eventFlags)
 
         let sideToSelect = stateLock.withLock { () -> ShiftSide? in
             switch type {
             case .keyDown:
-                classifier.otherKeyChanged()
+                _ = state.classifier.process(.otherKey)
             case .flagsChanged:
-                if let side = ShiftSide(keyCode: keyCode) {
-                    let isDown = side.isPressed(
-                        eventFlags: eventFlags.rawValue,
-                        previouslyPressed: classifier.isPressed(side)
-                    )
-                    if case .select(let selectedSide) = classifier.shiftChanged(
-                        side: side,
-                        isDown: isDown,
-                        timestamp: timestamp,
-                        hasOtherModifiers: hasOtherModifiers
-                    ) {
-                        return selectedSide
-                    }
-                } else {
-                    classifier.otherKeyChanged()
+                let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+                guard let side = ShiftSide(keyCode: keyCode) else {
+                    _ = state.classifier.process(.otherKey)
+                    return nil
                 }
+                let eventFlags = event.flags
+                let input: ShiftTapClassifier.Input
+                if side.isPressed(
+                    eventFlags: eventFlags.rawValue,
+                    previouslyPressed: state.classifier.isPressed(side)
+                ) {
+                    input = .shiftPressed(
+                        side,
+                        timestamp: event.timestamp,
+                        isChorded: Self.hasChordModifier(eventFlags)
+                    )
+                } else {
+                    input = .shiftReleased(
+                        side,
+                        timestamp: event.timestamp,
+                        isChorded: Self.hasChordModifier(eventFlags)
+                    )
+                }
+                return state.classifier.process(input)
             default:
                 break
             }
@@ -235,12 +265,12 @@ final class ShiftEventMonitor: @unchecked Sendable {
     }
 
     private func waitForSelection(of side: ShiftSide) {
-        let request = InputSourceSelectionRequest()
+        let gate = SelectionGate()
         let didRegister = stateLock.withLock {
-            guard tap != nil else {
+            guard case .running = state.lifecycle else {
                 return false
             }
-            pendingSelectionRequest = request
+            state.pendingSelectionGate = gate
             return true
         }
         guard didRegister else {
@@ -248,23 +278,23 @@ final class ShiftEventMonitor: @unchecked Sendable {
         }
 
         Task { @MainActor [inputSources] in
-            inputSources.select(for: side, request: request)
+            inputSources.select(for: side, gate: gate)
         }
 
-        let outcome = request.wait(timeout: Self.selectionConfirmationTimeout)
+        let result = gate.wait(timeout: Self.selectionConfirmationTimeout)
 
         stateLock.withLock {
-            if pendingSelectionRequest === request {
-                pendingSelectionRequest = nil
+            if state.pendingSelectionGate === gate {
+                state.pendingSelectionGate = nil
             }
         }
 
-        switch outcome {
-        case .timedOutBeforeSelection:
+        switch result {
+        case .timedOutBeforeStart:
             logger.warning("Input source selection did not start before the event deadline")
-        case .timedOutAfterSelection:
+        case .timedOutAfterStart:
             logger.warning("Input source selection was not confirmed before the event deadline")
-        default:
+        case .completed:
             break
         }
     }
