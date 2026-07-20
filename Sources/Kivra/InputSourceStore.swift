@@ -22,6 +22,7 @@ final class InputSourceStore {
     private var rightID: String?
     private var leftTarget: SelectionTarget?
     private var rightTarget: SelectionTarget?
+    private weak var pendingSelectionRequest: InputSourceSelectionRequest?
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
 
     init() {
@@ -56,7 +57,11 @@ final class InputSourceStore {
         rebuildSelectionTargets()
     }
 
-    func select(for side: ShiftSide) {
+    func select(for side: ShiftSide, request: InputSourceSelectionRequest) {
+        guard request.isPending else {
+            return
+        }
+
         var target = selectionTarget(for: side)
         if target == nil {
             // The source may have been enabled before its distributed
@@ -67,11 +72,27 @@ final class InputSourceStore {
 
         guard let target else {
             logger.error("Configured input source is unavailable")
+            request.complete(with: .failed)
             return
         }
 
+        if Self.currentSourceID() == target.id {
+            request.complete(with: .alreadySelected)
+            return
+        }
+
+        guard request.arm(targetID: target.id) else {
+            return
+        }
+        pendingSelectionRequest = request
+
         var status = TISSelectInputSource(target.source)
         if status == noErr {
+            return
+        }
+
+        guard request.isPending else {
+            clearPendingRequest(ifMatching: request)
             return
         }
 
@@ -84,6 +105,21 @@ final class InputSourceStore {
         }
         if status != noErr {
             logger.error("Input source selection failed with status \(status), id: \(target.id, privacy: .public)")
+            request.complete(with: .failed)
+            clearPendingRequest(ifMatching: request)
+        }
+    }
+
+    func selectedSourceDidChange() {
+        guard
+            let request = pendingSelectionRequest,
+            let sourceID = Self.currentSourceID()
+        else {
+            return
+        }
+
+        if request.confirm(sourceID: sourceID) || !request.isPending {
+            clearPendingRequest(ifMatching: request)
         }
     }
 
@@ -127,6 +163,12 @@ final class InputSourceStore {
         }
     }
 
+    private func clearPendingRequest(ifMatching request: InputSourceSelectionRequest) {
+        if pendingSelectionRequest === request {
+            pendingSelectionRequest = nil
+        }
+    }
+
     private static func preferenceKey(for side: ShiftSide) -> String {
         switch side {
         case .left: Self.leftSourceKey
@@ -137,6 +179,11 @@ final class InputSourceStore {
     private static func identifier(for source: TISInputSource) -> String? {
         TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
             .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String }
+    }
+
+    private static func currentSourceID() -> String? {
+        let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        return identifier(for: source)
     }
 
     private static func name(for source: TISInputSource) -> String? {

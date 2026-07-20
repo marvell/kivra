@@ -24,7 +24,10 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     }()
     private lazy var monitor = ShiftEventMonitor(
         inputSources: inputSources,
-        thresholdMilliseconds: thresholdMilliseconds
+        thresholdMilliseconds: thresholdMilliseconds,
+        onRunningStateChanged: { [weak self] in
+            self?.rebuildMenu()
+        }
     )
     private var statusItem: NSStatusItem?
     private var onboardingController: OnboardingWindowController?
@@ -43,6 +46,12 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
             self,
             selector: #selector(inputSourcesChanged),
             name: NSNotification.Name(kTISNotifyEnabledKeyboardInputSourcesChanged as String),
+            object: nil
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(selectedInputSourceChanged),
+            name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
             object: nil
         )
 
@@ -69,6 +78,10 @@ final class StatusBarController: NSObject, NSApplicationDelegate, SPUUpdaterDele
     @objc private func inputSourcesChanged() {
         inputSources.refresh()
         onboardingController?.refreshInputSources()
+    }
+
+    @objc private func selectedInputSourceChanged() {
+        inputSources.selectedSourceDidChange()
     }
 
     @objc private func toggleMonitoring(_ sender: NSMenuItem) {
