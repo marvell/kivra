@@ -62,7 +62,12 @@ struct ShiftTapClassifier: Sendable {
         maximumDurationNanoseconds = UInt64(maximumDurationMilliseconds) * 1_000_000
     }
 
-    mutating func shiftChanged(side: ShiftSide, isDown: Bool, timestamp: UInt64) -> ShiftTapAction {
+    mutating func shiftChanged(
+        side: ShiftSide,
+        isDown: Bool,
+        timestamp: UInt64,
+        hasOtherModifiers: Bool = false
+    ) -> ShiftTapAction {
         if isDown {
             switch side {
             case .left:
@@ -71,14 +76,22 @@ struct ShiftTapClassifier: Sendable {
                 }
                 let overlapsRight = right.isPressed
                 right.isInvalid = right.isInvalid || overlapsRight
-                left = State(pressedAt: timestamp, isPressed: true, isInvalid: overlapsRight)
+                left = State(
+                    pressedAt: timestamp,
+                    isPressed: true,
+                    isInvalid: overlapsRight || hasOtherModifiers
+                )
             case .right:
                 guard !right.isPressed else {
                     return .none
                 }
                 let overlapsLeft = left.isPressed
                 left.isInvalid = left.isInvalid || overlapsLeft
-                right = State(pressedAt: timestamp, isPressed: true, isInvalid: overlapsLeft)
+                right = State(
+                    pressedAt: timestamp,
+                    isPressed: true,
+                    isInvalid: overlapsLeft || hasOtherModifiers
+                )
             }
             return .none
         }
@@ -86,8 +99,10 @@ struct ShiftTapClassifier: Sendable {
         let isValid: Bool
         switch side {
         case .left:
+            left.isInvalid = left.isInvalid || hasOtherModifiers
             isValid = Self.release(&left, timestamp: timestamp, maximumDuration: maximumDurationNanoseconds)
         case .right:
+            right.isInvalid = right.isInvalid || hasOtherModifiers
             isValid = Self.release(&right, timestamp: timestamp, maximumDuration: maximumDurationNanoseconds)
         }
         return isValid ? .select(side) : .none

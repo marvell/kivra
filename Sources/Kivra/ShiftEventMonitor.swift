@@ -4,6 +4,12 @@ import os
 
 final class ShiftEventMonitor: @unchecked Sendable {
     private static let selectionConfirmationTimeout: DispatchTimeInterval = .milliseconds(50)
+    private static let chordModifierFlags: CGEventFlags = [
+        .maskControl,
+        .maskAlternate,
+        .maskCommand,
+        .maskSecondaryFn,
+    ]
 
     private struct StopState {
         let tap: CFMachPort?
@@ -26,6 +32,10 @@ final class ShiftEventMonitor: @unchecked Sendable {
         stateLock.withLock {
             pendingStartGeneration != nil || tap != nil
         }
+    }
+
+    static func hasChordModifier(_ eventFlags: CGEventFlags) -> Bool {
+        !eventFlags.isDisjoint(with: chordModifierFlags)
     }
 
     @MainActor
@@ -187,7 +197,8 @@ final class ShiftEventMonitor: @unchecked Sendable {
 
         let timestamp = event.timestamp
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-        let eventFlags = event.flags.rawValue
+        let eventFlags = event.flags
+        let hasOtherModifiers = Self.hasChordModifier(eventFlags)
 
         let sideToSelect = stateLock.withLock { () -> ShiftSide? in
             switch type {
@@ -196,13 +207,14 @@ final class ShiftEventMonitor: @unchecked Sendable {
             case .flagsChanged:
                 if let side = ShiftSide(keyCode: keyCode) {
                     let isDown = side.isPressed(
-                        eventFlags: eventFlags,
+                        eventFlags: eventFlags.rawValue,
                         previouslyPressed: classifier.isPressed(side)
                     )
                     if case .select(let selectedSide) = classifier.shiftChanged(
                         side: side,
                         isDown: isDown,
-                        timestamp: timestamp
+                        timestamp: timestamp,
+                        hasOtherModifiers: hasOtherModifiers
                     ) {
                         return selectedSide
                     }
@@ -224,8 +236,15 @@ final class ShiftEventMonitor: @unchecked Sendable {
 
     private func waitForSelection(of side: ShiftSide) {
         let request = InputSourceSelectionRequest()
-        stateLock.withLock {
+        let didRegister = stateLock.withLock {
+            guard tap != nil else {
+                return false
+            }
             pendingSelectionRequest = request
+            return true
+        }
+        guard didRegister else {
+            return
         }
 
         Task { @MainActor [inputSources] in

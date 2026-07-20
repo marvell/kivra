@@ -1,3 +1,4 @@
+import ApplicationServices
 import XCTest
 
 @testable import Kivra
@@ -55,6 +56,29 @@ final class ShiftTapClassifierTests: XCTestCase {
         classifier.otherKeyChanged()
         XCTAssertEqual(
             classifier.shiftChanged(side: .left, isDown: false, timestamp: 100 * millisecond),
+            .none
+        )
+    }
+
+    func testModifierHeldBeforeShiftDoesNotSelectSource() {
+        var classifier = ShiftTapClassifier(maximumDurationMilliseconds: 250)
+
+        XCTAssertEqual(
+            classifier.shiftChanged(
+                side: .left,
+                isDown: true,
+                timestamp: 0,
+                hasOtherModifiers: true
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            classifier.shiftChanged(
+                side: .left,
+                isDown: false,
+                timestamp: 100 * millisecond,
+                hasOtherModifiers: true
+            ),
             .none
         )
     }
@@ -155,5 +179,13 @@ final class ShiftTapClassifierTests: XCTestCase {
 
         XCTAssertTrue(ShiftSide.left.isPressed(eventFlags: shiftFlag, previouslyPressed: false))
         XCTAssertFalse(ShiftSide.left.isPressed(eventFlags: shiftFlag, previouslyPressed: true))
+    }
+
+    func testChordModifierDetectionExcludesCapsLock() {
+        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskControl))
+        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskAlternate))
+        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskCommand))
+        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskSecondaryFn))
+        XCTAssertFalse(ShiftEventMonitor.hasChordModifier(.maskAlphaShift))
     }
 }

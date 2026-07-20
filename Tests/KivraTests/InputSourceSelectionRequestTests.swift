@@ -38,6 +38,16 @@ final class InputSourceSelectionRequestTests: XCTestCase {
         XCTAssertFalse(request.arm(targetID: "target"))
     }
 
+    func testCancellationBeforeSelectionPreventsArming() {
+        let request = InputSourceSelectionRequest()
+
+        request.complete(with: .cancelled)
+
+        XCTAssertFalse(request.isPending)
+        XCTAssertFalse(request.arm(targetID: "target"))
+        XCTAssertEqual(request.wait(timeout: .milliseconds(1)), .cancelled)
+    }
+
     func testTimeoutAfterSelectionStartsIsDistinguished() {
         let request = InputSourceSelectionRequest()
 
