@@ -121,6 +121,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { leftID, rightID, thresholdMilliseconds in
                 completedLeftID = leftID
@@ -146,6 +147,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
         )
@@ -164,6 +166,7 @@ final class OnboardingModelTests: XCTestCase {
             thresholdMilliseconds: 250,
             mode: .settings,
             launchAtLogin: launchAtLogin,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
         )
@@ -181,6 +184,7 @@ final class OnboardingModelTests: XCTestCase {
             thresholdMilliseconds: 250,
             mode: .settings,
             launchAtLogin: launchAtLogin,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
         )
@@ -201,6 +205,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
                 didFinish = true
@@ -224,6 +229,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
                 didFinish = true
@@ -234,6 +240,28 @@ final class OnboardingModelTests: XCTestCase {
 
         XCTAssertFalse(didFinish)
         XCTAssertEqual(model.launchAtLoginError, "Could not update Open at Login. Try again.")
+    }
+
+    @MainActor
+    func testRequestAccessibilityUsesInjectedClient() {
+        var requested = false
+        let model = OnboardingModel(
+            sources: [source("a"), source("b")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            accessibility: accessibilityClient(
+                granted: false,
+                request: { requested = true }
+            ),
+            onAccessibilityChange: {},
+            onFinish: { _, _, _ in }
+        )
+
+        model.requestAccessibility()
+
+        XCTAssertTrue(requested)
+        XCTAssertFalse(model.accessibilityGranted)
     }
 
     private func source(_ id: String) -> InputSource {
@@ -255,9 +283,21 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: rightID,
             thresholdMilliseconds: thresholdMilliseconds,
             mode: mode,
+            accessibility: accessibilityClient(granted: accessibilityGranted),
             onAccessibilityChange: {},
-            accessibilityGranted: accessibilityGranted,
             onFinish: { _, _, _ in }
+        )
+    }
+
+    @MainActor
+    private func accessibilityClient(
+        granted: Bool = true,
+        request: @escaping () -> Void = {}
+    ) -> AccessibilityClient {
+        AccessibilityClient(
+            isGranted: { granted },
+            request: request,
+            openSettings: {}
         )
     }
 }

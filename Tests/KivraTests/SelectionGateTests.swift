@@ -53,4 +53,27 @@ final class SelectionGateTests: XCTestCase {
         XCTAssertFalse(gate.finish())
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
     }
+
+    func testWaitingThreadObservesConcurrentCompletion() {
+        let gate = SelectionGate()
+        let completed = expectation(description: "Wait completed")
+
+        XCTAssertTrue(gate.start())
+        DispatchQueue.global().async {
+            XCTAssertEqual(gate.wait(timeout: .seconds(1)), .completed)
+            completed.fulfill()
+        }
+
+        XCTAssertTrue(gate.finish())
+        wait(for: [completed], timeout: 1)
+    }
+
+    func testTimeoutBeforeStartPreventsLateFinish() {
+        let gate = SelectionGate()
+
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutBeforeStart)
+
+        XCTAssertFalse(gate.finish())
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutBeforeStart)
+    }
 }

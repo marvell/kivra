@@ -26,7 +26,7 @@ do {
     exit(EXIT_FAILURE)
 }
 
-let delegate = StatusBarController()
+let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 withExtendedLifetime(instanceLock) {

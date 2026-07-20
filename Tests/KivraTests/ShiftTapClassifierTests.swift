@@ -169,10 +169,10 @@ final class ShiftTapClassifierTests: XCTestCase {
     }
 
     func testChordModifierDetectionExcludesCapsLock() {
-        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskControl))
-        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskAlternate))
-        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskCommand))
-        XCTAssertTrue(ShiftEventMonitor.hasChordModifier(.maskSecondaryFn))
-        XCTAssertFalse(ShiftEventMonitor.hasChordModifier(.maskAlphaShift))
+        XCTAssertTrue(ShiftEventInterpreter.hasChordModifier(CGEventFlags.maskControl.rawValue))
+        XCTAssertTrue(ShiftEventInterpreter.hasChordModifier(CGEventFlags.maskAlternate.rawValue))
+        XCTAssertTrue(ShiftEventInterpreter.hasChordModifier(CGEventFlags.maskCommand.rawValue))
+        XCTAssertTrue(ShiftEventInterpreter.hasChordModifier(CGEventFlags.maskSecondaryFn.rawValue))
+        XCTAssertFalse(ShiftEventInterpreter.hasChordModifier(CGEventFlags.maskAlphaShift.rawValue))
     }
 }

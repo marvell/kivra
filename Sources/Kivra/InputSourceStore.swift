@@ -1,17 +1,7 @@
-import Carbon.HIToolbox
-import Foundation
 import os
-
-struct InputSource: Identifiable, Hashable {
-    let id: String
-    let name: String
-}
 
 @MainActor
 final class InputSourceStore {
-    static let leftSourceKey = "leftInputSourceID"
-    static let rightSourceKey = "rightInputSourceID"
-
     private final class PendingSelection {
         let targetID: String
         weak var gate: SelectionGate?
@@ -22,41 +12,25 @@ final class InputSourceStore {
         }
     }
 
-    private var sourcesByID: [String: TISInputSource] = [:]
-    private var leftID: String?
-    private var rightID: String?
+    private var sourcesByID: [String: InputSource] = [:]
     private var pendingSelection: PendingSelection?
+    private let system: InputSourceSystem
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
+    private(set) var configuration: AppConfiguration
 
-    init() {
-        leftID = UserDefaults.standard.string(forKey: Self.leftSourceKey)
-        rightID = UserDefaults.standard.string(forKey: Self.rightSourceKey)
+    init(configuration: AppConfiguration, system: InputSourceSystem) {
+        self.configuration = configuration
+        self.system = system
         refresh()
     }
 
     func availableSources() -> [InputSource] {
-        return sourcesByID.map { InputSource(id: $0.key, name: Self.name(for: $0.value) ?? $0.key) }
+        sourcesByID.values
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func refresh() {
-        let properties: CFDictionary =
-            [
-                kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource!,
-                kTISPropertyInputSourceIsEnabled: true,
-                kTISPropertyInputSourceIsSelectCapable: true,
-            ] as CFDictionary
-        let inputSources = TISCreateInputSourceList(properties, false).takeRetainedValue() as? [TISInputSource] ?? []
-        let updatedSources = Dictionary(
-            uniqueKeysWithValues: inputSources.compactMap { source -> (String, TISInputSource)? in
-                guard let id = Self.identifier(for: source) else {
-                    return nil
-                }
-                return (id, source)
-            }
-        )
-
-        sourcesByID = updatedSources
+        sourcesByID = system.refresh()
     }
 
     func select(for side: ShiftSide, gate: SelectionGate) {
@@ -78,7 +52,7 @@ final class InputSourceStore {
             return
         }
 
-        if Self.currentSourceID() == target.id {
+        if system.currentSourceID() == target.id {
             gate.finish()
             return
         }
@@ -88,8 +62,8 @@ final class InputSourceStore {
         }
         pendingSelection = PendingSelection(targetID: target.id, gate: gate)
 
-        var status = TISSelectInputSource(target.source)
-        if status == noErr {
+        var result = system.selectSource(id: target.id)
+        if result == .selected {
             return
         }
 
@@ -99,21 +73,18 @@ final class InputSourceStore {
         }
 
         // The enabled-source notification can race with a tap. Rebuild the
-        // retained TISInputSource snapshot and retry once instead of dropping
-        // the user's switch.
+        // system snapshot and retry once instead of dropping the user's switch.
         refresh()
         guard gate.isPending else {
             clearPendingSelection(ifMatching: gate)
             return
         }
         if let refreshedTarget = selectionTarget(for: side) {
-            status = TISSelectInputSource(refreshedTarget.source)
+            result = system.selectSource(id: refreshedTarget.id)
+        } else {
+            result = .unavailable
         }
-        if status != noErr {
-            logger.error("Input source selection failed with status \(status), id: \(target.id, privacy: .public)")
-            gate.finish()
-            clearPendingSelection(ifMatching: gate)
-        }
+        finishFailedSelection(result, targetID: target.id, gate: gate)
     }
 
     func selectedSourceDidChange() {
@@ -124,49 +95,39 @@ final class InputSourceStore {
             self.pendingSelection = nil
             return
         }
-        guard let sourceID = Self.currentSourceID() else {
+        guard gate.isPending else {
+            self.pendingSelection = nil
+            return
+        }
+        guard let sourceID = system.currentSourceID() else {
             return
         }
 
         if sourceID == pendingSelection.targetID {
             gate.finish()
             self.pendingSelection = nil
-        } else if !gate.isPending {
-            self.pendingSelection = nil
         }
     }
 
     func configuredSource(for side: ShiftSide) -> String? {
         switch side {
-        case .left: leftID
-        case .right: rightID
+        case .left: configuration.leftSourceID
+        case .right: configuration.rightSourceID
         }
     }
 
-    func setConfiguredSource(_ id: String, for side: ShiftSide) {
-        switch side {
-        case .left: leftID = id
-        case .right: rightID = id
-        }
-        UserDefaults.standard.set(id, forKey: Self.preferenceKey(for: side))
+    func updateConfiguration(_ configuration: AppConfiguration) {
+        self.configuration = configuration
     }
 
-    func configuredSourceName(for side: ShiftSide) -> String? {
-        guard let id = configuredSource(for: side) else {
-            return nil
-        }
-
-        return sourcesByID[id].flatMap(Self.name(for:))
-    }
-
-    private func selectionTarget(for side: ShiftSide) -> (id: String, source: TISInputSource)? {
+    private func selectionTarget(for side: ShiftSide) -> InputSource? {
         guard
             let id = configuredSource(for: side),
             let source = sourcesByID[id]
         else {
             return nil
         }
-        return (id, source)
+        return source
     }
 
     private func clearPendingSelection(ifMatching gate: SelectionGate) {
@@ -175,25 +136,22 @@ final class InputSourceStore {
         }
     }
 
-    private static func preferenceKey(for side: ShiftSide) -> String {
-        switch side {
-        case .left: Self.leftSourceKey
-        case .right: Self.rightSourceKey
+    private func finishFailedSelection(
+        _ result: InputSourceSelectionResult,
+        targetID: String,
+        gate: SelectionGate
+    ) {
+        guard result != .selected else {
+            return
         }
-    }
-
-    private static func identifier(for source: TISInputSource) -> String? {
-        TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
-            .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String }
-    }
-
-    private static func currentSourceID() -> String? {
-        let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-        return identifier(for: source)
-    }
-
-    private static func name(for source: TISInputSource) -> String? {
-        TISGetInputSourceProperty(source, kTISPropertyLocalizedName)
-            .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String }
+        if case .failed(let status) = result {
+            logger.error(
+                "Input source selection failed with status \(status), id: \(targetID, privacy: .public)"
+            )
+        } else {
+            logger.error("Configured input source is unavailable")
+        }
+        gate.finish()
+        clearPendingSelection(ifMatching: gate)
     }
 }

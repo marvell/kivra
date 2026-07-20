@@ -4,13 +4,6 @@ import os
 
 final class ShiftEventMonitor: @unchecked Sendable {
     private static let selectionConfirmationTimeout: DispatchTimeInterval = .milliseconds(50)
-    private static let chordModifierFlags: CGEventFlags = [
-        .maskControl,
-        .maskAlternate,
-        .maskCommand,
-        .maskSecondaryFn,
-    ]
-
     private final class StartToken: @unchecked Sendable {}
 
     private final class TapSession {
@@ -30,7 +23,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
     }
 
     private struct State {
-        var classifier: ShiftTapClassifier
+        var interpreter: ShiftEventInterpreter
         var lifecycle: Lifecycle = .stopped
         var pendingSelectionGate: SelectionGate?
     }
@@ -50,10 +43,6 @@ final class ShiftEventMonitor: @unchecked Sendable {
         }
     }
 
-    static func hasChordModifier(_ eventFlags: CGEventFlags) -> Bool {
-        !eventFlags.isDisjoint(with: chordModifierFlags)
-    }
-
     @MainActor
     init(
         inputSources: InputSourceStore,
@@ -62,7 +51,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
     ) {
         self.inputSources = inputSources
         self.onRunningStateChanged = onRunningStateChanged
-        state = State(classifier: ShiftTapClassifier(maximumDurationMilliseconds: thresholdMilliseconds))
+        state = State(interpreter: ShiftEventInterpreter(thresholdMilliseconds: thresholdMilliseconds))
     }
 
     @MainActor
@@ -97,7 +86,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
                 session = nil
             }
             state.lifecycle = .stopped
-            state.classifier.reset()
+            state.interpreter.reset()
             let gate = state.pendingSelectionGate
             state.pendingSelectionGate = nil
             return (session, gate)
@@ -118,7 +107,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
     @MainActor
     func updateThreshold(milliseconds: Int) {
         stateLock.withLock {
-            state.classifier = ShiftTapClassifier(maximumDurationMilliseconds: milliseconds)
+            state.interpreter.updateThreshold(milliseconds: milliseconds)
         }
     }
 
@@ -209,7 +198,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             let currentTap = stateLock.withLock { () -> CFMachPort? in
-                state.classifier.reset()
+                state.interpreter.reset()
                 guard case .running(let session) = state.lifecycle else {
                     return nil
                 }
@@ -222,39 +211,13 @@ final class ShiftEventMonitor: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        let sideToSelect = stateLock.withLock { () -> ShiftSide? in
-            switch type {
-            case .keyDown:
-                _ = state.classifier.process(.otherKey)
-            case .flagsChanged:
-                let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-                guard let side = ShiftSide(keyCode: keyCode) else {
-                    _ = state.classifier.process(.otherKey)
-                    return nil
-                }
-                let eventFlags = event.flags
-                let input: ShiftTapClassifier.Input
-                if side.isPressed(
-                    eventFlags: eventFlags.rawValue,
-                    previouslyPressed: state.classifier.isPressed(side)
-                ) {
-                    input = .shiftPressed(
-                        side,
-                        timestamp: event.timestamp,
-                        isChorded: Self.hasChordModifier(eventFlags)
-                    )
-                } else {
-                    input = .shiftReleased(
-                        side,
-                        timestamp: event.timestamp,
-                        isChorded: Self.hasChordModifier(eventFlags)
-                    )
-                }
-                return state.classifier.process(input)
-            default:
-                break
-            }
-            return nil
+        let sideToSelect = stateLock.withLock {
+            state.interpreter.process(
+                type: type,
+                keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
+                flags: event.flags.rawValue,
+                timestamp: event.timestamp
+            )
         }
 
         if let sideToSelect {
