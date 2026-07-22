@@ -9,14 +9,17 @@ private final class OnboardingWindow: NSWindow {
 @MainActor
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private let model: OnboardingModel
+    private let onClose: () -> Void
     private let onDismiss: () -> Void
     private var isCompleting = false
 
     init(
         model: OnboardingModel,
+        onClose: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.model = model
+        self.onClose = onClose
         self.onDismiss = onDismiss
 
         let window = OnboardingWindow(
@@ -62,7 +65,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         model.refreshLaunchAtLogin()
         model.startPermissionObservation()
         showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
 
@@ -77,6 +79,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model.stopPermissionObservation()
+        onClose()
         if !isCompleting {
             onDismiss()
         }

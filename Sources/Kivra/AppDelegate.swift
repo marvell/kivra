@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let accessibility: AccessibilityClient
     private let inputSources: InputSourceStore
     private let launchAtLogin: LaunchAtLoginController
+    private let presentation: ApplicationPresentationController
     private let updater: AppUpdateController
     private let applicationIdentity: ApplicationIdentity
     private lazy var monitor = ShiftEventMonitor(
@@ -29,7 +30,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             system: CarbonInputSourceSystem()
         )
         launchAtLogin = LaunchAtLoginController()
-        updater = AppUpdateController()
+        let presentation = ApplicationPresentationController()
+        self.presentation = presentation
+        updater = AppUpdateController(
+            onPresentationRequested: { [weak presentation] userInitiated in
+                presentation?.begin(
+                    .update,
+                    activate: userInitiated,
+                    showBadge: !userInitiated
+                )
+            },
+            onAttentionReceived: { [weak presentation] in
+                presentation?.clearBadge()
+            },
+            onSessionFinished: { [weak presentation] in
+                presentation?.end(.update)
+            }
+        )
         applicationIdentity = .current
         super.init()
     }
@@ -96,6 +113,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showWizard(mode: OnboardingModel.Mode) {
         accessibilityChanged()
+        let presentationReason: ApplicationPresentationController.Reason =
+            mode == .firstLaunch ? .onboarding : .settings
         if onboardingController == nil {
             let model = OnboardingModel(
                 sources: inputSources.availableSources(),
@@ -118,11 +137,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             onboardingController = OnboardingWindowController(
                 model: model,
+                onClose: { [weak self] in
+                    self?.presentation.end(presentationReason)
+                },
                 onDismiss: { [weak self] in
                     self?.onboardingDismissed()
                 }
             )
         }
+        presentation.begin(presentationReason, activate: true)
         onboardingController?.present()
     }
 
