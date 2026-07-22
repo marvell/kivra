@@ -1,36 +1,83 @@
 # Kivra
 
-Kivra is a macOS status bar app that selects a keyboard input source with a short Shift tap:
+Switch between two macOS keyboard layouts with a quick tap of Shift.
 
-- Left Shift selects the first configured source.
-- Right Shift selects the second configured source.
+- Tap **Left Shift** for one layout.
+- Tap **Right Shift** for the other.
+- Keep using Shift normally for capital letters and keyboard shortcuts.
 
-It does not alter the original keyboard events. A Shift tap switches only when it is released within the selected threshold and no other key or Shift was pressed in between.
-
-Kivra is a lightweight, high-performance native app for one of macOS's oldest typing frustrations: switching keyboard layouts without breaking your flow. It is designed for people who type fast and need layout switching to feel immediate, simple, and dependable.
+Kivra is made for people who type in two languages and want each layout to
+have its own key. There is no need to cycle through input sources or remember
+which layout is currently active.
 
 ## Requirements
 
-- Apple Silicon Mac running macOS 15 or later
-- Accessibility permission
+- A Mac with Apple silicon
+- macOS 15 or later
+- Two keyboard layouts enabled in macOS
 
-## Install
+## Install Kivra
 
-1. Download `Kivra-<version>-macOS-arm64.dmg` from the [latest release](https://github.com/marvell/kivra/releases/latest).
+1. [Download the latest release](https://github.com/marvell/kivra/releases/latest)
+   and choose the file named `Kivra-<version>-macOS-arm64.dmg`.
 2. Open the downloaded disk image.
-3. Drag `Kivra.app` to `Applications`.
+3. Drag **Kivra** into the **Applications** folder.
 4. Open Kivra from Applications.
-5. Follow the welcome setup to grant Accessibility access and choose a layout for each Shift key.
 
-Kivra checks for updates daily. You can also use **Check for Updates…** from the status bar menu. Updates are downloaded from GitHub Releases, verified, installed in place, and relaunched after confirmation. To uninstall, quit Kivra and move it from Applications to the Bin.
+Kivra is signed and notarized by its publisher. It is distributed through
+GitHub Releases rather than the Mac App Store.
 
-Kivra is signed and notarized by its publisher. It is distributed through GitHub Releases, not the Mac App Store.
-It uses the [Sparkle](https://sparkle-project.org/) update framework; its license is included in the application bundle.
+## Set it up
 
-## Develop
+The welcome guide takes care of the initial setup:
 
-If [Task](https://taskfile.dev/) is installed, its commands are a recommended
-shortcut for common development work:
+1. Grant **Accessibility** access. Kivra needs this permission to recognize
+   Shift taps; it does not read or store what you type.
+2. Choose a keyboard layout for **Left Shift** and another for **Right Shift**.
+3. Choose whether Kivra should open automatically when you log in.
+4. Select **Start Kivra**.
+
+Kivra then lives behind the keyboard icon in the macOS menu bar. Open that
+menu at any time to pause Kivra, change its settings, check for updates, or
+quit the app.
+
+If fewer than two layouts appear, add another one in **System Settings →
+Keyboard → Text Input → Edit**, then return to Kivra.
+
+## How a Shift tap works
+
+A quick press and release switches to the layout assigned to that Shift key.
+Kivra does not switch layouts when Shift is used together with another key, or
+when both Shift keys overlap, so normal typing and shortcuts keep working as
+expected. It also leaves the original keyboard events unchanged.
+
+The default tap limit is 250 ms. If quick taps are not being recognized—or a
+longer press switches layouts too easily—open **Settings…** from the menu bar
+and adjust **Tap threshold**.
+
+## Privacy and permissions
+
+Kivra uses Accessibility access only to recognize Shift taps. It does not read
+or store the text you type.
+
+macOS temporarily blocks keyboard-event monitoring while Secure Event Input is
+active, which can happen in some password fields. Kivra cannot switch layouts
+during that time and resumes when macOS allows monitoring again.
+
+## Updates and uninstalling
+
+Kivra checks for updates daily. You can also choose **Check for Updates…** from
+the menu bar. Updates are downloaded from GitHub Releases, verified, and
+installed after you confirm them.
+
+To uninstall Kivra, quit it and move **Kivra** from Applications to the Bin.
+
+<details>
+<summary><strong>For developers and maintainers</strong></summary>
+
+### Develop
+
+Use [Task](https://taskfile.dev/) for common development work:
 
 ```bash
 task run
@@ -41,7 +88,7 @@ task lint
 task install-dev
 ```
 
-You can also run the underlying commands directly. From the project directory:
+You can also run the app directly from the project directory:
 
 ```bash
 swift run
@@ -53,8 +100,6 @@ Or build and run the release binary:
 swift build -c release
 .build/release/Kivra
 ```
-
-The keyboard icon appears in the status bar.
 
 ### Local development installation
 
@@ -93,39 +138,31 @@ Set `INSTALL_DIRECTORY` if you prefer another fixed location, such as
 `$HOME/Applications`. Do not move the app between rebuilds if you want macOS to
 retain its privacy permission consistently.
 
-## Setup
-
-Kivra opens a guided setup on first launch. It explains and requests Accessibility access, then lets you choose a system keyboard input source for **Left Shift** and **Right Shift**. You can reopen the guide later with **Settings…** from the status bar menu.
-
-The tap threshold is 250 ms by default and can be changed from the guided setup.
-
-Kivra only shows enabled, selectable input sources from macOS settings.
-
-## Limits
-
-macOS can prevent keyboard-event monitoring while Secure Event Input is enabled, such as in some password fields. Kivra cannot operate during that time.
-
-macOS and the focused application control the final input-source application timing. Kivra requests the source selection directly when Shift is released to minimize delay.
-
-## Test
+### Test
 
 ```bash
 task lint
 task test
 ```
 
-## Release
+### Release
 
-Maintainers need an Apple Developer account with a Developer ID Application certificate. Configure these GitHub Actions secrets:
+Maintainers need an Apple Developer account with a Developer ID Application
+certificate. Configure these GitHub Actions secrets:
 
-- `APPLE_CERTIFICATE_BASE64`, the base64-encoded `.p12` Developer ID Application certificate.
+- `APPLE_CERTIFICATE_BASE64`, the base64-encoded `.p12` Developer ID
+  Application certificate.
 - `APPLE_CERTIFICATE_PASSWORD`, the certificate export password.
 - `APPLE_ID`, the Apple Account used for notarization.
 - `APPLE_APP_SPECIFIC_PASSWORD`, an app-specific password for that account.
 - `APPLE_TEAM_ID`, the Apple Developer team ID.
-- `SPARKLE_PRIVATE_KEY`, the base64-encoded private Ed25519 key exported by Sparkle's `generate_keys` tool. Keep an offline backup and never commit it.
+- `SPARKLE_PRIVATE_KEY`, the base64-encoded private Ed25519 key exported by
+  Sparkle's `generate_keys` tool. Keep an offline backup and never commit it.
 
-GitHub Pages must use **GitHub Actions** as its publishing source. The release workflow publishes the signed Sparkle feed at `https://marvell.github.io/kivra/appcast.xml` only after the corresponding GitHub Release assets are downloadable.
+GitHub Pages must use **GitHub Actions** as its publishing source. The release
+workflow publishes the signed Sparkle feed at
+`https://marvell.github.io/kivra/appcast.xml` only after the corresponding
+GitHub Release assets are downloadable.
 
 Create and push a semantic-version tag to publish a release:
 
@@ -134,6 +171,16 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-The release workflow tests Kivra, signs the app and its embedded Sparkle helpers, notarizes the app and disk image, publishes the DMG with its SHA-256 checksum, and deploys a signed Sparkle appcast. Published releases are treated as immutable; rerunning a completed release only republishes its existing appcast.
+The release workflow tests Kivra, signs the app and its embedded Sparkle
+helpers, notarizes the app and disk image, publishes the DMG with its SHA-256
+checksum, and deploys a signed Sparkle appcast. Published releases are treated
+as immutable; rerunning a completed release only republishes its existing
+appcast.
 
-The first Sparkle-enabled release still needs to be installed manually by users of `v0.1.0`. Releases after that can update in place.
+The first Sparkle-enabled release still needs to be installed manually by
+users of `v0.1.0`. Releases after that can update in place.
+
+Kivra uses the [Sparkle](https://sparkle-project.org/) update framework. Its
+license is included in the application bundle.
+
+</details>
