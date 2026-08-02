@@ -13,7 +13,7 @@ which layout is currently active.
 ## Requirements
 
 - A Mac with Apple silicon
-- macOS 15 or later
+- macOS 14 or later
 - Two keyboard layouts enabled in macOS
 
 ## Install Kivra
