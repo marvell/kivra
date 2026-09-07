@@ -63,7 +63,7 @@ struct OnboardingView: View {
             .padding(.top, 14)
             .padding(.trailing, 14)
         }
-        .frame(minWidth: 620, minHeight: 480)
+        .frame(minWidth: 620, minHeight: 600)
         .foregroundStyle(.white)
     }
 

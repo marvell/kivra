@@ -64,6 +64,8 @@ final class InputSourceStore {
 
         var result = system.selectSource(id: target.id)
         if result == .selected {
+            // The current source can change here before another app is ready to use it.
+            // Keep the event gate closed until the distributed notification arrives.
             return
         }
 

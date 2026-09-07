@@ -23,7 +23,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         self.onDismiss = onDismiss
 
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false

@@ -121,6 +121,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { leftID, rightID, thresholdMilliseconds in
@@ -147,6 +148,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
@@ -166,6 +168,7 @@ final class OnboardingModelTests: XCTestCase {
             thresholdMilliseconds: 250,
             mode: .settings,
             launchAtLogin: launchAtLogin,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
@@ -184,6 +187,7 @@ final class OnboardingModelTests: XCTestCase {
             thresholdMilliseconds: 250,
             mode: .settings,
             launchAtLogin: launchAtLogin,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
@@ -205,6 +209,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
@@ -229,6 +234,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
@@ -250,6 +256,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(
                 granted: false,
                 request: { requested = true }
@@ -283,6 +290,7 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: rightID,
             thresholdMilliseconds: thresholdMilliseconds,
             mode: mode,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(granted: accessibilityGranted),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }

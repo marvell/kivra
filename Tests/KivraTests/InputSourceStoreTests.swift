@@ -74,6 +74,130 @@ final class InputSourceStoreTests: XCTestCase {
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
     }
 
+    func testCurrentSourceMatchingAfterSelectionStillWaitsForNotification() {
+        let system = FakeInputSourceSystem(
+            snapshots: [[InputSource(id: "left", name: "Left")]],
+            selectsImmediately: true
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(system.currentID, "left")
+        XCTAssertTrue(gate.isPending)
+        XCTAssertEqual(system.currentSourceIDCallCount, 1)
+
+        store.selectedSourceDidChange()
+
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
+    }
+
+    func testCurrentSourceMatchingAfterRetryStillWaitsForNotification() {
+        let source = InputSource(id: "left", name: "Left")
+        let system = FakeInputSourceSystem(
+            snapshots: [[source], [source]],
+            selectionResults: [.failed(-1), .selected],
+            selectsImmediately: true
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(system.selectedIDs, ["left", "left"])
+        XCTAssertEqual(system.currentID, "left")
+        XCTAssertTrue(gate.isPending)
+
+        store.selectedSourceDidChange()
+
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
+    }
+
+    func testNotificationDuringSelectionIsNotMissed() {
+        let system = FakeInputSourceSystem(
+            snapshots: [[InputSource(id: "left", name: "Left")]],
+            selectsImmediately: true
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+        system.onSelect = { [weak store] in
+            store?.selectedSourceDidChange()
+        }
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
+        let sourceCalls = system.currentSourceIDCallCount
+        store.selectedSourceDidChange()
+        XCTAssertEqual(system.currentSourceIDCallCount, sourceCalls)
+    }
+
+    func testExpiredGateDoesNotQueryOrSelectSources() {
+        let system = FakeInputSourceSystem(
+            snapshots: [[InputSource(id: "left", name: "Left")]]
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+        XCTAssertEqual(gate.wait(timeout: .nanoseconds(0)), .timedOutBeforeStart)
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(system.refreshCallCount, 1)
+        XCTAssertEqual(system.currentSourceIDCallCount, 0)
+        XCTAssertTrue(system.selectedIDs.isEmpty)
+    }
+
+    func testSelectionTimingOutDoesNotRetryOrRefresh() {
+        let source = InputSource(id: "left", name: "Left")
+        let system = FakeInputSourceSystem(
+            snapshots: [[source]],
+            selectionResults: [.failed(-1)]
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+        system.onSelect = {
+            XCTAssertEqual(gate.wait(timeout: .nanoseconds(0)), .timedOutAfterStart)
+        }
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(system.refreshCallCount, 1)
+        XCTAssertEqual(system.selectedIDs, ["left"])
+        let sourceCalls = system.currentSourceIDCallCount
+        store.selectedSourceDidChange()
+        XCTAssertEqual(system.currentSourceIDCallCount, sourceCalls)
+    }
+
+    func testNonmatchingSourceCannotCompleteSelectionAfterPreviousTimeout() {
+        let system = FakeInputSourceSystem(snapshots: [
+            [
+                InputSource(id: "left", name: "Left"),
+                InputSource(id: "right", name: "Right"),
+            ]
+        ])
+        let store = makeStore(leftID: "left", rightID: "right", system: system)
+        let oldGate = SelectionGate()
+        store.select(for: .left, gate: oldGate)
+        XCTAssertEqual(oldGate.wait(timeout: .nanoseconds(0)), .timedOutAfterStart)
+        let newGate = SelectionGate()
+        store.select(for: .right, gate: newGate)
+
+        system.currentID = "left"
+        store.selectedSourceDidChange()
+
+        XCTAssertTrue(newGate.isPending)
+        XCTAssertFalse(oldGate.finish())
+
+        system.currentID = "right"
+        store.selectedSourceDidChange()
+
+        XCTAssertEqual(newGate.wait(timeout: .milliseconds(1)), .completed)
+        let sourceCalls = system.currentSourceIDCallCount
+        store.selectedSourceDidChange()
+        XCTAssertEqual(system.currentSourceIDCallCount, sourceCalls)
+    }
+
     func testNonmatchingSelectedNotificationDoesNotCompleteSelection() {
         let system = FakeInputSourceSystem(
             snapshots: [[InputSource(id: "left", name: "Left")]]
@@ -123,10 +247,11 @@ final class InputSourceStoreTests: XCTestCase {
 
     private func makeStore(
         leftID: String? = nil,
+        rightID: String? = nil,
         system: FakeInputSourceSystem
     ) -> InputSourceStore {
         InputSourceStore(
-            configuration: AppConfiguration(leftSourceID: leftID),
+            configuration: AppConfiguration(leftSourceID: leftID, rightSourceID: rightID),
             system: system
         )
     }
@@ -136,7 +261,9 @@ final class InputSourceStoreTests: XCTestCase {
 private final class FakeInputSourceSystem: InputSourceSystem {
     private var snapshots: [[InputSource]]
     private var selectionResults: [InputSourceSelectionResult]
+    private let selectsImmediately: Bool
     var currentID: String?
+    var onSelect: (() -> Void)?
     private(set) var refreshCallCount = 0
     private(set) var currentSourceIDCallCount = 0
     private(set) var selectedIDs: [String] = []
@@ -144,11 +271,13 @@ private final class FakeInputSourceSystem: InputSourceSystem {
     init(
         snapshots: [[InputSource]],
         currentID: String? = nil,
-        selectionResults: [InputSourceSelectionResult] = [.selected]
+        selectionResults: [InputSourceSelectionResult] = [.selected],
+        selectsImmediately: Bool = false
     ) {
         self.snapshots = snapshots
         self.currentID = currentID
         self.selectionResults = selectionResults
+        self.selectsImmediately = selectsImmediately
     }
 
     func refresh() -> [String: InputSource] {
@@ -164,6 +293,11 @@ private final class FakeInputSourceSystem: InputSourceSystem {
 
     func selectSource(id: String) -> InputSourceSelectionResult {
         selectedIDs.append(id)
-        return selectionResults.isEmpty ? .selected : selectionResults.removeFirst()
+        let result = selectionResults.isEmpty ? .selected : selectionResults.removeFirst()
+        if result == .selected, selectsImmediately {
+            currentID = id
+        }
+        onSelect?()
+        return result
     }
 }

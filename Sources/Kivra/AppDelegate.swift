@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let accessibility: AccessibilityClient
     private let inputSources: InputSourceStore
     private let launchAtLogin: LaunchAtLoginController
+    private let inputSourceIndicator: InputSourceIndicatorController
     private let presentation: ApplicationPresentationController
     private let updater: AppUpdateController
     private let applicationIdentity: ApplicationIdentity
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             system: CarbonInputSourceSystem()
         )
         launchAtLogin = LaunchAtLoginController()
+        inputSourceIndicator = InputSourceIndicatorController()
         let presentation = ApplicationPresentationController()
         self.presentation = presentation
         updater = AppUpdateController(
@@ -123,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 thresholdMilliseconds: inputSources.configuration.tapThresholdMilliseconds,
                 mode: mode,
                 launchAtLogin: launchAtLogin,
+                inputSourceIndicator: inputSourceIndicator,
                 accessibility: accessibility,
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()

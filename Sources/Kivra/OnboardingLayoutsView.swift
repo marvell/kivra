@@ -20,35 +20,30 @@ struct OnboardingLayoutsView: View {
                 .foregroundStyle(.white.opacity(0.50))
                 .padding(.top, 6)
 
-            VStack(spacing: 8) {
-                layoutPicker(title: "Left Shift", selection: $model.selectedLeftID)
-                layoutPicker(
-                    title: "Right Shift",
-                    selection: $model.selectedRightID,
-                    excluding: model.selectedLeftID
-                )
-            }
-            .frame(maxWidth: 420)
-            .padding(.top, 12)
+            ScrollView {
+                VStack(spacing: 8) {
+                    layoutPicker(title: "Left Shift", selection: $model.selectedLeftID)
+                    layoutPicker(
+                        title: "Right Shift",
+                        selection: $model.selectedRightID,
+                        excluding: model.selectedLeftID
+                    )
 
-            tapThresholdConfiguration
-                .frame(maxWidth: 420)
-                .padding(.top, 8)
+                    tapThresholdConfiguration
+                    launchAtLoginConfiguration
+                    OnboardingInputSourceIndicatorView(model: model)
 
-            launchAtLoginConfiguration
-                .frame(maxWidth: 420)
-                .padding(.top, 8)
-
-            Group {
-                if model.sources.count < 2 {
-                    Text("\(applicationName) needs two enabled keyboard layouts.")
+                    if model.sources.count < 2 {
+                        Text("\(applicationName) needs two enabled keyboard layouts.")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(OnboardingTheme.accent)
+                    }
                 }
+                .frame(maxWidth: 420)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
-            .font(.system(size: 12, design: .rounded))
-            .foregroundStyle(OnboardingTheme.accent)
-            .padding(.top, 10)
-
-            Spacer()
+            .frame(maxHeight: .infinity)
 
             HStack(spacing: 10) {
                 OnboardingSecondaryButton(

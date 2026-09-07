@@ -37,6 +37,14 @@ final class OnboardingModel: ObservableObject {
     @Published var isLaunchAtLoginEnabled: Bool
     @Published private(set) var launchAtLoginState: LaunchAtLoginState
     @Published private(set) var launchAtLoginError: String?
+    @Published var hideInputSourceIndicator: Bool {
+        didSet {
+            if hideInputSourceIndicator != oldValue {
+                hasInputSourceIndicatorChanges = true
+            }
+        }
+    }
+    @Published private(set) var inputSourceIndicatorError: String?
 
     @Published private(set) var sources: [InputSource]
     let mode: Mode
@@ -44,6 +52,8 @@ final class OnboardingModel: ObservableObject {
     private let onFinish: (String, String, Int) -> Void
     private let accessibility: AccessibilityClient
     private let launchAtLogin: any LaunchAtLoginControlling
+    private let inputSourceIndicator: any InputSourceIndicatorControlling
+    private var hasInputSourceIndicatorChanges = false
     private var permissionTask: Task<Void, Never>?
 
     init(
@@ -53,6 +63,7 @@ final class OnboardingModel: ObservableObject {
         thresholdMilliseconds: Int,
         mode: Mode = .firstLaunch,
         launchAtLogin: any LaunchAtLoginControlling = LaunchAtLoginController(),
+        inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient = .live,
         onAccessibilityChange: @escaping () -> Void,
         onFinish: @escaping (String, String, Int) -> Void
@@ -72,6 +83,8 @@ final class OnboardingModel: ObservableObject {
         selectedRightID = selections.right
         self.thresholdMilliseconds = Self.normalizedThreshold(thresholdMilliseconds)
         self.launchAtLogin = launchAtLogin
+        self.inputSourceIndicator = inputSourceIndicator
+        hideInputSourceIndicator = inputSourceIndicator.isHidden
         launchAtLoginState = initialLaunchAtLoginState
         isLaunchAtLoginEnabled =
             mode == .firstLaunch
@@ -168,6 +181,16 @@ final class OnboardingModel: ObservableObject {
             launchAtLoginState = launchAtLogin.state
             launchAtLoginError = "Could not update Open at Login. Try again."
             return
+        }
+        if hasInputSourceIndicatorChanges {
+            do {
+                try inputSourceIndicator.setHidden(hideInputSourceIndicator)
+                hasInputSourceIndicatorChanges = false
+                inputSourceIndicatorError = nil
+            } catch {
+                inputSourceIndicatorError = "Could not update the input source indicator. Try again."
+                return
+            }
         }
         onFinish(selectedLeftID, selectedRightID, thresholdMilliseconds)
     }

@@ -35,7 +35,9 @@ The welcome guide takes care of the initial setup:
    Shift taps; it does not read or store what you type.
 2. Choose a keyboard layout for **Left Shift** and another for **Right Shift**.
 3. Choose whether Kivra should open automatically when you log in.
-4. Select **Start Kivra**.
+4. Optionally enable **Hide input source indicator** if you experience a pause
+   when typing immediately after switching layouts.
+5. Select **Start Kivra**.
 
 Kivra then lives behind the keyboard icon in the macOS menu bar. Open that
 menu at any time to pause Kivra, change its settings, check for updates, or
@@ -43,6 +45,23 @@ quit the app.
 
 If fewer than two layouts appear, add another one in **System Settings →
 Keyboard → Text Input → Edit**, then return to Kivra.
+
+### Input source indicator
+
+**Hide input source indicator** reflects your current macOS setting. If you
+already hid the indicator manually, the switch is on. Otherwise, it stays off
+until you choose to enable it.
+
+Hiding the language popup near the text cursor in all apps may reduce typing
+delays after switching layouts. This uses an undocumented macOS setting, so its
+effect can change with macOS updates. Some apps may need to be restarted.
+
+Changes take effect only when you select **Start Kivra** or **Save Changes**.
+Saving without changing the switch leaves the system setting alone. Turn the
+switch off and save to show the indicator again, even if it was hidden manually.
+
+Kivra and Kivra Dev read the same macOS setting. Quitting either app does not
+restore the indicator.
 
 ## How a Shift tap works
 
@@ -70,7 +89,9 @@ Kivra checks for updates daily. You can also choose **Check for Updates…** fro
 the menu bar. Updates are downloaded from GitHub Releases, verified, and
 installed after you confirm them.
 
-To uninstall Kivra, quit it and move **Kivra** from Applications to the Bin.
+If you want the input source indicator back, turn off **Hide input source
+indicator** in settings and save before uninstalling. Then quit Kivra and move
+**Kivra** from Applications to the Bin.
 
 <details>
 <summary><strong>For developers and maintainers</strong></summary>
