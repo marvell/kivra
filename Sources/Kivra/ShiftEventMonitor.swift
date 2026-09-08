@@ -97,11 +97,16 @@ final class ShiftEventMonitor: @unchecked Sendable {
             CGEvent.tapEnable(tap: session.tap, enable: false)
         }
         if let session {
-            CFRunLoopPerformBlock(session.runLoop, CFRunLoopMode.commonModes.rawValue) {
-                CFRunLoopStop(session.runLoop)
-            }
-            CFRunLoopWakeUp(session.runLoop)
+            Self.stopRunLoop(session.runLoop)
         }
+    }
+
+    nonisolated static func stopRunLoop(_ runLoop: CFRunLoop) {
+        // Create this block outside MainActor: it executes on the event-tap thread.
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes.rawValue) {
+            CFRunLoopStop(runLoop)
+        }
+        CFRunLoopWakeUp(runLoop)
     }
 
     @MainActor
