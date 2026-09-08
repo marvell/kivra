@@ -7,6 +7,19 @@ final class AppUpdateController: NSObject, SPUUpdaterDelegate,
     private let onPresentationRequested: (_ userInitiated: Bool) -> Void
     private let onAttentionReceived: () -> Void
     private let onSessionFinished: () -> Void
+    var onAvailabilityChanged: () -> Void = {}
+
+    private var availabilityState = UpdateAvailabilityState() {
+        didSet {
+            if oldValue.availability != availabilityState.availability {
+                onAvailabilityChanged()
+            }
+        }
+    }
+
+    var availability: UpdateAvailability? {
+        availabilityState.availability
+    }
 
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard Bundle.main.bundleURL.pathExtension == "app",
@@ -40,6 +53,51 @@ final class AppUpdateController: NSObject, SPUUpdaterDelegate,
         updaterController?.checkForUpdates(nil)
     }
 
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        availabilityState.found(version: item.displayVersionString)
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
+    ) -> Bool {
+        availabilityState.prepared(version: item.displayVersionString)
+        return false
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        userDidMake choice: SPUUserUpdateChoice,
+        forUpdate item: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        if choice == .skip {
+            availabilityState.clear()
+        } else if state.stage == .installing {
+            availabilityState.prepared(version: item.displayVersionString)
+        }
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        guard let error = error as NSError?, error.domain == SUSparkleErrorDomain else {
+            return
+        }
+        let invalidatingErrors: [SUError] = [
+            .unarchivingError, .signatureError, .validationError,
+            .missingUpdateError, .notValidUpdateError,
+        ]
+        if invalidatingErrors.contains(where: { error.code == $0.rawValue }) {
+            availabilityState.clear()
+        } else if error.code == SUError.noUpdateError.rawValue {
+            availabilityState.noUpdateFound()
+        }
+    }
+
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         Self.allowedChannels(
             forVersion: Bundle.main.object(
@@ -61,6 +119,11 @@ final class AppUpdateController: NSObject, SPUUpdaterDelegate,
         forUpdate update: SUAppcastItem,
         state: SPUUserUpdateState
     ) {
+        if state.stage == .installing {
+            availabilityState.prepared(version: update.displayVersionString)
+        } else {
+            availabilityState.found(version: update.displayVersionString)
+        }
         onPresentationRequested(state.userInitiated)
     }
 

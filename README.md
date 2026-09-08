@@ -87,7 +87,14 @@ during that time and resumes when macOS allows monitoring again.
 
 Kivra checks for updates daily. You can also choose **Check for Updates…** from
 the menu bar. Updates are downloaded from GitHub Releases, verified, and
-installed after you confirm them.
+installed after you confirm them. If you enable automatic installation in
+the update window, Kivra can prepare updates silently and install them when
+you quit.
+
+An arrow badge appears beside the keyboard icon when an update is available.
+The menu shows the version and changes to **Update … Ready…** once installation
+is prepared. Select that item to open the update window. Choosing to be reminded
+later keeps the badge; skipping the version removes it.
 
 If you want the input source indicator back, turn off **Hide input source
 indicator** in settings and save before uninstalling. Then quit Kivra and move

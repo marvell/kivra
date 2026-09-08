@@ -24,6 +24,11 @@ struct StatusMenuState: Equatable {
 
     let monitoring: Monitoring
     let canCheckForUpdates: Bool
+    var updateAvailability: UpdateAvailability?
+
+    var updateTitle: String {
+        updateAvailability?.title ?? "Check for Updates…"
+    }
 
     var showsPrivacySettings: Bool {
         monitoring == .permissionRequired
@@ -39,6 +44,7 @@ final class StatusMenuController: NSObject {
     private let onCheckForUpdates: () -> Void
     private let onQuit: () -> Void
     private let statusItem: NSStatusItem
+    private var lastState: StatusMenuState?
 
     init(
         identity: ApplicationIdentity,
@@ -57,14 +63,27 @@ final class StatusMenuController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "keyboard",
-            accessibilityDescription: identity.displayName
-        )
+        statusItem.button?.image = Self.statusImage(hasUpdate: false)
+        statusItem.button?.setAccessibilityLabel(identity.displayName)
         statusItem.button?.title = identity.isDevelopment ? " DEV" : ""
     }
 
     func update(state: StatusMenuState) {
+        guard state != lastState else {
+            return
+        }
+        lastState = state
+
+        let description =
+            state.updateAvailability.map {
+                "\(identity.displayName): \($0.title)"
+            } ?? identity.displayName
+        statusItem.button?.image = Self.statusImage(
+            hasUpdate: state.updateAvailability != nil
+        )
+        statusItem.button?.toolTip = description
+        statusItem.button?.setAccessibilityLabel(description)
+
         let menu = NSMenu()
         let stateItem = menu.addItem(
             withTitle: state.monitoring.title,
@@ -98,7 +117,7 @@ final class StatusMenuController: NSObject {
             menu.addItem(.separator())
             addItem(
                 to: menu,
-                title: "Check for Updates…",
+                title: state.updateTitle,
                 action: #selector(checkForUpdates)
             )
         }
@@ -111,6 +130,33 @@ final class StatusMenuController: NSObject {
             keyEquivalent: "q"
         )
         statusItem.menu = menu
+    }
+
+    static func statusImage(hasUpdate: Bool) -> NSImage? {
+        guard
+            let keyboard = NSImage(
+                systemSymbolName: "keyboard",
+                accessibilityDescription: nil
+            )
+        else {
+            return nil
+        }
+        guard hasUpdate,
+            let badge = NSImage(
+                systemSymbolName: "arrow.up.circle.fill",
+                accessibilityDescription: nil
+            )
+        else {
+            keyboard.isTemplate = true
+            return keyboard
+        }
+        let image = NSImage(size: NSSize(width: 28, height: 18), flipped: false) { _ in
+            keyboard.draw(in: NSRect(x: 0, y: 3, width: 18, height: 12))
+            badge.draw(in: NSRect(x: 18, y: 0, width: 10, height: 10))
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     private func addItem(

@@ -51,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         applicationIdentity = .current
         super.init()
+        updater.onAvailabilityChanged = { [weak self] in
+            self?.updateStatusMenu()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -238,7 +241,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu?.update(
             state: StatusMenuState(
                 monitoring: monitoring,
-                canCheckForUpdates: updater.isAvailable
+                canCheckForUpdates: updater.isAvailable,
+                updateAvailability: updater.availability
             )
         )
     }
