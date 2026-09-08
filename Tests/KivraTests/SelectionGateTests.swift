@@ -26,6 +26,7 @@ final class SelectionGateTests: XCTestCase {
         XCTAssertTrue(gate.start())
 
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
+        XCTAssertTrue(gate.acceptsSelectionConfirmation)
     }
 
     func testGateStartsOnlyOnce() {
@@ -52,6 +53,26 @@ final class SelectionGateTests: XCTestCase {
 
         XCTAssertFalse(gate.finish())
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
+    }
+
+    func testSelectionCanBeConfirmedAfterTimeout() {
+        let gate = SelectionGate()
+
+        XCTAssertTrue(gate.start())
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
+
+        XCTAssertTrue(gate.confirmSelection())
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
+    }
+
+    func testCompletedGateCannotBeConfirmedAsSelection() {
+        let gate = SelectionGate()
+
+        XCTAssertTrue(gate.start())
+        XCTAssertTrue(gate.finish())
+
+        XCTAssertFalse(gate.acceptsSelectionConfirmation)
+        XCTAssertFalse(gate.confirmSelection())
     }
 
     func testWaitingThreadObservesConcurrentCompletion() {

@@ -26,6 +26,17 @@ final class SelectionGate: @unchecked Sendable {
         }
     }
 
+    var acceptsSelectionConfirmation: Bool {
+        lock.withLock {
+            switch state {
+            case .started, .finished(.timedOutAfterStart):
+                return true
+            case .waitingToStart, .finished:
+                return false
+            }
+        }
+    }
+
     func start() -> Bool {
         lock.withLock {
             guard case .waitingToStart = state else {
@@ -39,6 +50,24 @@ final class SelectionGate: @unchecked Sendable {
     @discardableResult
     func finish() -> Bool {
         complete(with: .completed)
+    }
+
+    func confirmSelection() -> Bool {
+        let result = lock.withLock { () -> (confirmed: Bool, shouldSignal: Bool) in
+            switch state {
+            case .started:
+                state = .finished(.completed)
+                return (true, true)
+            case .finished(.timedOutAfterStart):
+                return (true, false)
+            case .waitingToStart, .finished:
+                return (false, false)
+            }
+        }
+        if result.shouldSignal {
+            completion.signal()
+        }
+        return result.confirmed
     }
 
     func wait(timeout: DispatchTimeInterval) -> WaitResult {

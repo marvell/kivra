@@ -47,6 +47,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/ThirdPartyLicenses" "$app/Contents/Frameworks"
 ditto "$binary_directory/Kivra" "$app/Contents/MacOS/Kivra"
 ditto "$binary_directory/Sparkle.framework" "$sparkle"
+ditto "$binary_directory/Kivra_Kivra.bundle" "$app/Contents/Resources/Kivra_Kivra.bundle"
 cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
 cp "$root/.build/checkouts/Sparkle/LICENSE" "$app/Contents/Resources/ThirdPartyLicenses/Sparkle.txt"
 

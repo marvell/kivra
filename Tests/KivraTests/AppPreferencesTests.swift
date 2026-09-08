@@ -20,6 +20,20 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testSwitchSoundsDefaultToDisabledAndPersistChanges() {
+        let preferences = AppPreferences(defaults: defaults)
+        XCTAssertFalse(preferences.switchSoundsEnabled)
+
+        preferences.switchSoundsEnabled = true
+        XCTAssertTrue(AppPreferences(defaults: defaults).switchSoundsEnabled)
+        preferences.configuration = AppConfiguration(leftSourceID: "left", rightSourceID: "right")
+        XCTAssertTrue(preferences.switchSoundsEnabled)
+
+        preferences.switchSoundsEnabled = false
+        XCTAssertFalse(AppPreferences(defaults: defaults).switchSoundsEnabled)
+    }
+
+    @MainActor
     func testMissingThresholdUsesDefault() {
         let preferences = AppPreferences(defaults: defaults)
 

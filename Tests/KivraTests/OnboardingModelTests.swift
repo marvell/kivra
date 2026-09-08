@@ -13,6 +13,70 @@ final class OnboardingModelTests: XCTestCase {
 
         XCTAssertEqual(model.step, .welcome)
         XCTAssertFalse(model.isSettingsMode)
+        XCTAssertFalse(model.switchSoundsEnabled)
+    }
+
+    @MainActor
+    func testSwitchSoundsUseSavedValueAndApplyOnlyOnFinish() {
+        for savedValue in [false, true] {
+            var appliedValues: [Bool] = []
+            let model = makeModel(
+                sources: [source("a"), source("b")],
+                leftID: "a",
+                rightID: "b",
+                mode: .settings,
+                switchSoundsEnabled: savedValue,
+                onFinish: { appliedValues.append($0.switchSoundsEnabled) }
+            )
+            XCTAssertEqual(model.switchSoundsEnabled, savedValue)
+
+            model.switchSoundsEnabled.toggle()
+            XCTAssertTrue(appliedValues.isEmpty)
+
+            model.finish()
+            XCTAssertEqual(appliedValues, [!savedValue])
+        }
+    }
+
+    @MainActor
+    func testDiscardingSoundDraftPreservesSavedValueWhenSettingsReopen() {
+        for savedValue in [false, true] {
+            var persistedValue = savedValue
+            var model: OnboardingModel? = makeModel(
+                sources: [source("a"), source("b")],
+                leftID: "a",
+                rightID: "b",
+                mode: .settings,
+                switchSoundsEnabled: savedValue,
+                onFinish: { persistedValue = $0.switchSoundsEnabled }
+            )
+            model?.switchSoundsEnabled.toggle()
+            model = nil
+
+            let reopened = makeModel(
+                sources: [source("a"), source("b")],
+                leftID: "a",
+                rightID: "b",
+                mode: .settings,
+                switchSoundsEnabled: persistedValue
+            )
+            XCTAssertEqual(reopened.switchSoundsEnabled, savedValue)
+        }
+    }
+
+    @MainActor
+    func testInvalidLayoutsDoNotSaveSoundDraft() {
+        var didFinish = false
+        let model = makeModel(
+            sources: [source("a")],
+            leftID: "a",
+            rightID: "a",
+            mode: .settings,
+            onFinish: { _ in didFinish = true }
+        )
+        model.switchSoundsEnabled = true
+        model.finish()
+        XCTAssertFalse(didFinish)
     }
 
     @MainActor
@@ -113,9 +177,7 @@ final class OnboardingModelTests: XCTestCase {
 
     @MainActor
     func testFinishPassesSelectedLayoutsAndThreshold() {
-        var completedLeftID: String?
-        var completedRightID: String?
-        var completedThreshold: Int?
+        var result: OnboardingModel.Result?
         let model = OnboardingModel(
             sources: [source("a"), source("b")],
             configuredLeftID: "a",
@@ -124,19 +186,20 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { leftID, rightID, thresholdMilliseconds in
-                completedLeftID = leftID
-                completedRightID = rightID
-                completedThreshold = thresholdMilliseconds
-            }
+            onFinish: { result = $0 }
         )
 
         model.thresholdMilliseconds = 350
         model.finish()
 
-        XCTAssertEqual(completedLeftID, "a")
-        XCTAssertEqual(completedRightID, "b")
-        XCTAssertEqual(completedThreshold, 350)
+        XCTAssertEqual(
+            result?.configuration,
+            AppConfiguration(
+                leftSourceID: "a",
+                rightSourceID: "b",
+                tapThresholdMilliseconds: 350
+            )
+        )
     }
 
     @MainActor
@@ -151,7 +214,7 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
+            onFinish: { _ in }
         )
 
         XCTAssertTrue(model.isLaunchAtLoginEnabled)
@@ -171,7 +234,7 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
+            onFinish: { _ in }
         )
 
         XCTAssertTrue(model.isLaunchAtLoginEnabled)
@@ -190,7 +253,7 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
+            onFinish: { _ in }
         )
         launchAtLogin.state = .disabled
 
@@ -212,7 +275,7 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in
+            onFinish: { _ in
                 didFinish = true
             }
         )
@@ -237,7 +300,7 @@ final class OnboardingModelTests: XCTestCase {
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in
+            onFinish: { _ in
                 didFinish = true
             }
         )
@@ -262,7 +325,7 @@ final class OnboardingModelTests: XCTestCase {
                 request: { requested = true }
             ),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
+            onFinish: { _ in }
         )
 
         model.requestAccessibility()
@@ -282,18 +345,22 @@ final class OnboardingModelTests: XCTestCase {
         rightID: String?,
         thresholdMilliseconds: Int = 250,
         mode: OnboardingModel.Mode = .firstLaunch,
-        accessibilityGranted: Bool = true
+        accessibilityGranted: Bool = true,
+        switchSoundsEnabled: Bool = false,
+        onFinish: @escaping (OnboardingModel.Result) -> Void = { _ in }
     ) -> OnboardingModel {
         OnboardingModel(
             sources: sources,
             configuredLeftID: leftID,
             configuredRightID: rightID,
             thresholdMilliseconds: thresholdMilliseconds,
+            switchSoundsEnabled: switchSoundsEnabled,
             mode: mode,
+            launchAtLogin: FakeLaunchAtLoginController(state: .disabled),
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(granted: accessibilityGranted),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
+            onFinish: onFinish
         )
     }
 

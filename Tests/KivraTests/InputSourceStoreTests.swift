@@ -4,6 +4,79 @@ import XCTest
 
 @MainActor
 final class InputSourceStoreTests: XCTestCase {
+    func testSelectionCallbackRunsOnceForEachSideAfterReleasingGate() {
+        for side in [ShiftSide.left, .right] {
+            let system = FakeInputSourceSystem(snapshots: [
+                [
+                    InputSource(id: "left", name: "Left"),
+                    InputSource(id: "right", name: "Right"),
+                ]
+            ])
+            let gate = SelectionGate()
+            var confirmed: [ShiftSide] = []
+            let store = makeStore(leftID: "left", rightID: "right", system: system) {
+                XCTAssertEqual(gate.wait(timeout: .nanoseconds(0)), .completed)
+                confirmed.append($0)
+            }
+            store.select(for: side, gate: gate)
+            XCTAssertTrue(confirmed.isEmpty)
+            system.currentID = side.rawValue
+            store.selectedSourceDidChange()
+            store.selectedSourceDidChange()
+            XCTAssertEqual(confirmed, [side])
+        }
+    }
+
+    func testSelectionCallbackIgnoresNoOpFailureAndUnrelatedChanges() {
+        for scenario in ["alreadySelected", "failed", "unrelated"] {
+            let system = FakeInputSourceSystem(
+                snapshots: [[InputSource(id: "left", name: "Left")]],
+                currentID: scenario == "alreadySelected" ? "left" : nil,
+                selectionResults: scenario == "failed" ? [.failed(-1), .failed(-2)] : [.selected]
+            )
+            var confirmed: [ShiftSide] = []
+            let store = makeStore(leftID: "left", system: system) { confirmed.append($0) }
+            let gate = SelectionGate()
+            store.select(for: .left, gate: gate)
+            system.currentID = scenario == "unrelated" ? "other" : "left"
+            store.selectedSourceDidChange()
+            XCTAssertTrue(confirmed.isEmpty, scenario)
+        }
+    }
+
+    func testSelectionCallbackRunsForConfirmationAfterTimeout() {
+        let system = FakeInputSourceSystem(
+            snapshots: [[InputSource(id: "left", name: "Left")]]
+        )
+        var confirmed: [ShiftSide] = []
+        let store = makeStore(leftID: "left", system: system) { confirmed.append($0) }
+        let gate = SelectionGate()
+        store.select(for: .left, gate: gate)
+        XCTAssertEqual(gate.wait(timeout: .nanoseconds(0)), .timedOutAfterStart)
+
+        system.currentID = "left"
+        store.selectedSourceDidChange()
+        store.selectedSourceDidChange()
+
+        XCTAssertEqual(confirmed, [.left])
+    }
+
+    func testCompletedSelectionGateDoesNotTriggerCallback() {
+        let system = FakeInputSourceSystem(
+            snapshots: [[InputSource(id: "left", name: "Left")]]
+        )
+        var confirmed: [ShiftSide] = []
+        let store = makeStore(leftID: "left", system: system) { confirmed.append($0) }
+        let gate = SelectionGate()
+        store.select(for: .left, gate: gate)
+        XCTAssertTrue(gate.finish())
+
+        system.currentID = "left"
+        store.selectedSourceDidChange()
+
+        XCTAssertTrue(confirmed.isEmpty)
+    }
+
     func testAvailableSourcesAreSortedByDisplayName() {
         let system = FakeInputSourceSystem(
             snapshots: [
@@ -227,32 +300,36 @@ final class InputSourceStoreTests: XCTestCase {
         XCTAssertEqual(system.selectedIDs, ["left", "left"])
     }
 
-    func testTimedOutGateDoesNotLeaveActionableStaleSelection() {
+    func testTimedOutGateConfirmsLateSelectionOnlyOnce() {
         let system = FakeInputSourceSystem(
             snapshots: [[InputSource(id: "left", name: "Left")]]
         )
-        let store = makeStore(leftID: "left", system: system)
+        var confirmed: [ShiftSide] = []
+        let store = makeStore(leftID: "left", system: system) { confirmed.append($0) }
         let gate = SelectionGate()
         store.select(for: .left, gate: gate)
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
-        let currentSourceCalls = system.currentSourceIDCallCount
 
         system.currentID = "left"
         store.selectedSourceDidChange()
+        let currentSourceCalls = system.currentSourceIDCallCount
         store.selectedSourceDidChange()
 
         XCTAssertEqual(system.currentSourceIDCallCount, currentSourceCalls)
+        XCTAssertEqual(confirmed, [.left])
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .timedOutAfterStart)
     }
 
     private func makeStore(
         leftID: String? = nil,
         rightID: String? = nil,
-        system: FakeInputSourceSystem
+        system: FakeInputSourceSystem,
+        onSelectionConfirmed: @escaping (ShiftSide) -> Void = { _ in }
     ) -> InputSourceStore {
         InputSourceStore(
             configuration: AppConfiguration(leftSourceID: leftID, rightSourceID: rightID),
-            system: system
+            system: system,
+            onSelectionConfirmed: onSelectionConfirmed
         )
     }
 }

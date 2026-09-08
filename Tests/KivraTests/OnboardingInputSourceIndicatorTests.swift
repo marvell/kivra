@@ -228,7 +228,7 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
             inputSourceIndicator: indicator,
             accessibility: AccessibilityClient(isGranted: { true }, request: {}, openSettings: {}),
             onAccessibilityChange: {},
-            onFinish: { _, _, _ in onFinish() }
+            onFinish: { _ in onFinish() }
         )
     }
 }

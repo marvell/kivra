@@ -7,6 +7,7 @@ final class AppPreferences {
         static let rightSourceID = "rightInputSourceID"
         static let tapThresholdMilliseconds = "tapThresholdMilliseconds"
         static let onboardingCompleted = "onboardingCompleted"
+        static let switchSoundsEnabled = "switchSoundsEnabled"
     }
 
     private let defaults: UserDefaults
@@ -34,6 +35,11 @@ final class AppPreferences {
                 forKey: Key.tapThresholdMilliseconds
             )
         }
+    }
+
+    var switchSoundsEnabled: Bool {
+        get { defaults.bool(forKey: Key.switchSoundsEnabled) }
+        set { defaults.set(newValue, forKey: Key.switchSoundsEnabled) }
     }
 
     var onboardingCompleted: Bool? {
