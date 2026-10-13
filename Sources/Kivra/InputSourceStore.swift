@@ -123,6 +123,10 @@ final class InputSourceStore {
         }
     }
 
+    func configuredSourceName(for side: ShiftSide) -> String? {
+        configuredSource(for: side).flatMap { sourcesByID[$0]?.name }
+    }
+
     func updateConfiguration(_ configuration: AppConfiguration) {
         self.configuration = configuration
     }

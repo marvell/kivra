@@ -4,10 +4,10 @@ import XCTest
 
 final class ApplicationPresentationTests: XCTestCase {
     func testMonitoringStateTitles() {
-        XCTAssertEqual(StatusMenuState.Monitoring.active.title, "Monitoring active")
+        XCTAssertEqual(StatusMenuState.Monitoring.active.title, "Shift switching is on")
         XCTAssertEqual(StatusMenuState.Monitoring.active.actionTitle, "Pause")
-        XCTAssertEqual(StatusMenuState.Monitoring.paused.title, "Monitoring paused")
-        XCTAssertEqual(StatusMenuState.Monitoring.paused.actionTitle, "Enable")
+        XCTAssertEqual(StatusMenuState.Monitoring.paused.title, "Shift switching is paused")
+        XCTAssertEqual(StatusMenuState.Monitoring.paused.actionTitle, "Resume")
         XCTAssertEqual(
             StatusMenuState.Monitoring.permissionRequired.title,
             "Accessibility permission required"

@@ -31,6 +31,22 @@ struct OnboardingPermissionView: View {
             .lineSpacing(4)
             .padding(.top, 11)
 
+            if !model.accessibilityGranted {
+                // macOS shows its permission prompt only once, so offer a
+                // direct path for people who dismissed it.
+                Button(action: model.openAccessibilitySettings) {
+                    HStack(spacing: 4) {
+                        Text("No prompt? Open Privacy & Security settings")
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(OnboardingTheme.accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 18)
+            }
+
             Spacer()
 
             HStack(spacing: 10) {

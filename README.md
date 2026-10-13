@@ -40,11 +40,13 @@ The welcome guide takes care of the initial setup:
 5. Select **Start Kivra**.
 
 Kivra then lives behind the keyboard icon in the macOS menu bar. Open that
-menu at any time to pause Kivra, change its settings, check for updates, or
-quit the app.
+menu at any time to see which layout each Shift key selects, pause Kivra,
+change its settings, check for updates, or quit the app. The icon fades while
+Kivra is paused and shows an exclamation mark when it needs Accessibility
+access.
 
-If fewer than two layouts appear, add another one in **System Settings →
-Keyboard → Text Input → Edit**, then return to Kivra.
+If fewer than two layouts appear, select **Open Keyboard Settings** and add
+another one in **Text Input → Edit**, then return to Kivra.
 
 ### Input source indicator
 

@@ -9,22 +9,48 @@ struct StatusMenuState: Equatable {
         var title: String {
             switch self {
             case .active:
-                "Monitoring active"
+                "Shift switching is on"
             case .paused:
-                "Monitoring paused"
+                "Shift switching is paused"
             case .permissionRequired:
                 "Accessibility permission required"
             }
         }
 
         var actionTitle: String {
-            self == .active ? "Pause" : "Enable"
+            switch self {
+            case .active:
+                "Pause"
+            case .paused:
+                "Resume"
+            case .permissionRequired:
+                "Grant Access…"
+            }
         }
     }
 
     let monitoring: Monitoring
     let canCheckForUpdates: Bool
     var updateAvailability: UpdateAvailability?
+    var leftLayoutName: String?
+    var rightLayoutName: String?
+
+    var layoutTitles: [String] {
+        [
+            "Left Shift: \(leftLayoutName ?? "Not available")",
+            "Right Shift: \(rightLayoutName ?? "Not available")",
+        ]
+    }
+
+    var statusIcon: StatusIcon {
+        if monitoring == .permissionRequired {
+            return StatusIcon(isDimmed: true, badge: .warning)
+        }
+        return StatusIcon(
+            isDimmed: monitoring == .paused,
+            badge: updateAvailability == nil ? nil : .update
+        )
+    }
 
     var updateTitle: String {
         updateAvailability?.title ?? "Check for Updates…"
@@ -33,6 +59,25 @@ struct StatusMenuState: Equatable {
     var showsPrivacySettings: Bool {
         monitoring == .permissionRequired
     }
+}
+
+struct StatusIcon: Equatable {
+    enum Badge: Equatable {
+        case update
+        case warning
+
+        var symbolName: String {
+            switch self {
+            case .update:
+                "arrow.up.circle.fill"
+            case .warning:
+                "exclamationmark.circle.fill"
+            }
+        }
+    }
+
+    var isDimmed = false
+    var badge: Badge?
 }
 
 @MainActor
@@ -63,7 +108,7 @@ final class StatusMenuController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
-        statusItem.button?.image = Self.statusImage(hasUpdate: false)
+        statusItem.button?.image = Self.statusImage(StatusIcon())
         statusItem.button?.setAccessibilityLabel(identity.displayName)
         statusItem.button?.title = identity.isDevelopment ? " DEV" : ""
     }
@@ -75,12 +120,10 @@ final class StatusMenuController: NSObject {
         lastState = state
 
         let description =
-            state.updateAvailability.map {
-                "\(identity.displayName): \($0.title)"
-            } ?? identity.displayName
-        statusItem.button?.image = Self.statusImage(
-            hasUpdate: state.updateAvailability != nil
-        )
+            ([identity.displayName + ": " + state.monitoring.title]
+            + (state.updateAvailability.map { [$0.title] } ?? []))
+            .joined(separator: ". ")
+        statusItem.button?.image = Self.statusImage(state.statusIcon)
         statusItem.button?.toolTip = description
         statusItem.button?.setAccessibilityLabel(description)
 
@@ -91,6 +134,11 @@ final class StatusMenuController: NSObject {
             keyEquivalent: ""
         )
         stateItem.isEnabled = false
+        for title in state.layoutTitles {
+            let layoutItem = menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+            layoutItem.isEnabled = false
+            layoutItem.indentationLevel = 1
+        }
         menu.addItem(.separator())
 
         addItem(
@@ -132,7 +180,7 @@ final class StatusMenuController: NSObject {
         statusItem.menu = menu
     }
 
-    static func statusImage(hasUpdate: Bool) -> NSImage? {
+    static func statusImage(_ icon: StatusIcon) -> NSImage? {
         guard
             let keyboard = NSImage(
                 systemSymbolName: "keyboard",
@@ -141,18 +189,24 @@ final class StatusMenuController: NSObject {
         else {
             return nil
         }
-        guard hasUpdate,
-            let badge = NSImage(
-                systemSymbolName: "arrow.up.circle.fill",
-                accessibilityDescription: nil
-            )
-        else {
+        let badge = icon.badge.flatMap {
+            NSImage(systemSymbolName: $0.symbolName, accessibilityDescription: nil)
+        }
+        guard icon.isDimmed || badge != nil else {
             keyboard.isTemplate = true
             return keyboard
         }
-        let image = NSImage(size: NSSize(width: 28, height: 18), flipped: false) { _ in
-            keyboard.draw(in: NSRect(x: 0, y: 3, width: 18, height: 12))
-            badge.draw(in: NSRect(x: 18, y: 0, width: 10, height: 10))
+        let width: CGFloat = badge == nil ? 18 : 28
+        let image = NSImage(size: NSSize(width: width, height: 18), flipped: false) { _ in
+            // Template images keep their alpha, so a faded keyboard stays
+            // legible in both light and dark menu bars.
+            keyboard.draw(
+                in: NSRect(x: 0, y: 3, width: 18, height: 12),
+                from: .zero,
+                operation: .sourceOver,
+                fraction: icon.isDimmed ? 0.4 : 1
+            )
+            badge?.draw(in: NSRect(x: 18, y: 0, width: 10, height: 10))
             return true
         }
         image.isTemplate = true

@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func inputSourcesChanged() {
         inputSources.refresh()
         onboardingController?.updateSources(inputSources.availableSources())
+        updateStatusMenu()
     }
 
     @objc private func selectedInputSourceChanged() {
@@ -242,7 +243,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state: StatusMenuState(
                 monitoring: monitoring,
                 canCheckForUpdates: updater.isAvailable,
-                updateAvailability: updater.availability
+                updateAvailability: updater.availability,
+                leftLayoutName: inputSources.configuredSourceName(for: .left),
+                rightLayoutName: inputSources.configuredSourceName(for: .right)
             )
         )
     }

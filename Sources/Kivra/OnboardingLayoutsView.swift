@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingLayoutsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @ObservedObject var model: OnboardingModel
     let dismiss: () -> Void
     @Binding var isTapThresholdExpanded: Bool
@@ -22,21 +23,22 @@ struct OnboardingLayoutsView: View {
 
             ScrollView {
                 VStack(spacing: 8) {
-                    layoutPicker(title: "Left Shift", selection: $model.selectedLeftID)
-                    layoutPicker(
-                        title: "Right Shift",
-                        selection: $model.selectedRightID,
-                        excluding: model.selectedLeftID
-                    )
+                    VStack(spacing: 8) {
+                        layoutPicker(title: "Left Shift", selection: $model.selectedLeftID)
+                        layoutPicker(
+                            title: "Right Shift",
+                            selection: $model.selectedRightID,
+                            excluding: model.selectedLeftID
+                        )
+                    }
+                    .overlay { swapButton }
 
                     tapThresholdConfiguration
                     launchAtLoginConfiguration
                     OnboardingInputSourceIndicatorView(model: model)
 
                     if model.sources.count < 2 {
-                        Text("\(applicationName) needs two enabled keyboard layouts.")
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundStyle(OnboardingTheme.accent)
+                        missingLayoutsNotice
                     }
                 }
                 .frame(maxWidth: 420)
@@ -63,6 +65,47 @@ struct OnboardingLayoutsView: View {
         }
         .padding(.horizontal, 42)
     }
+
+    private var swapButton: some View {
+        Button(action: model.swapLayouts) {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(model.canConfigureLayouts ? 0.70 : 0.25))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Color(red: 0.12, green: 0.12, blue: 0.14)))
+                .overlay(Circle().stroke(OnboardingTheme.border, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canConfigureLayouts)
+        .help("Swap layouts")
+        .accessibilityLabel("Swap layouts")
+    }
+
+    private var missingLayoutsNotice: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text("\(applicationName) needs two enabled keyboard layouts.")
+                .foregroundStyle(.white.opacity(0.70))
+            Spacer()
+            Button("Open Keyboard Settings") {
+                openURL(Self.keyboardSettingsURL)
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 12, weight: .medium, design: .rounded))
+        .foregroundStyle(OnboardingTheme.accent)
+        .padding(.horizontal, 14)
+        .frame(height: 40)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(OnboardingTheme.accent.opacity(0.08))
+        )
+    }
+
+    private static let keyboardSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension"
+    )!
 
     private var tapThresholdConfiguration: some View {
         VStack(spacing: 0) {
@@ -182,7 +225,7 @@ struct OnboardingLayoutsView: View {
                         )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Open Kivra at login")
+                        Text("Open \(applicationName) at login")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                     }
 
@@ -203,7 +246,7 @@ struct OnboardingLayoutsView: View {
             .padding(.horizontal, 14)
             .frame(height: 50)
             .disabled(!model.isLaunchAtLoginAvailable)
-            .accessibilityLabel("Open Kivra at login")
+            .accessibilityLabel("Open \(applicationName) at login")
             .accessibilityHint(
                 model.isLaunchAtLoginAvailable
                     ? "Applies when you save changes"

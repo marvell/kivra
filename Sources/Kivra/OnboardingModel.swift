@@ -151,6 +151,20 @@ final class OnboardingModel: ObservableObject {
         refreshPermission()
     }
 
+    func openAccessibilitySettings() {
+        accessibility.openSettings()
+    }
+
+    func swapLayouts() {
+        guard canConfigureLayouts else { return }
+        let leftID = selectedLeftID
+        let rightID = selectedRightID
+        // Assign the right side first so the left side's conflict resolution
+        // does not replace the layout being swapped in.
+        selectedRightID = leftID
+        selectedLeftID = rightID
+    }
+
     func startPermissionObservation() {
         guard permissionTask == nil else { return }
         refreshPermission()

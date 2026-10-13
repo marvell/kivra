@@ -57,6 +57,30 @@ final class OnboardingModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSwapLayoutsExchangesSides() {
+        let model = makeModel(
+            sources: [source("a"), source("b"), source("c")],
+            leftID: "a",
+            rightID: "c"
+        )
+
+        model.swapLayouts()
+
+        XCTAssertEqual(model.selectedLeftID, "c")
+        XCTAssertEqual(model.selectedRightID, "a")
+    }
+
+    @MainActor
+    func testSwapLayoutsRequiresTwoLayouts() {
+        let model = makeModel(sources: [source("a")], leftID: "a", rightID: nil)
+
+        model.swapLayouts()
+
+        XCTAssertEqual(model.selectedLeftID, "a")
+        XCTAssertEqual(model.selectedRightID, "a")
+    }
+
+    @MainActor
     func testChangingLeftSourceResolvesRightSourceConflict() {
         let model = makeModel(
             sources: [source("a"), source("b"), source("c")],
