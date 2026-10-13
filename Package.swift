@@ -17,7 +17,6 @@ let package = Package(
             dependencies: [
                 .product(name: "Sparkle", package: "Sparkle")
             ],
-            resources: [.copy("Sounds")],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-rpath",

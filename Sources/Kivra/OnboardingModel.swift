@@ -2,11 +2,6 @@ import SwiftUI
 
 @MainActor
 final class OnboardingModel: ObservableObject {
-    struct Result: Equatable {
-        let configuration: AppConfiguration
-        let switchSoundsEnabled: Bool
-    }
-
     enum Mode: Equatable {
         case firstLaunch
         case settings
@@ -39,7 +34,6 @@ final class OnboardingModel: ObservableObject {
     }
     @Published var selectedRightID: String
     @Published var thresholdMilliseconds: Int
-    @Published var switchSoundsEnabled: Bool
     @Published var isLaunchAtLoginEnabled: Bool
     @Published private(set) var launchAtLoginState: LaunchAtLoginState
     @Published private(set) var launchAtLoginError: String?
@@ -55,7 +49,7 @@ final class OnboardingModel: ObservableObject {
     @Published private(set) var sources: [InputSource]
     let mode: Mode
     private let onAccessibilityChange: () -> Void
-    private let onFinish: (Result) -> Void
+    private let onFinish: (String, String, Int) -> Void
     private let accessibility: AccessibilityClient
     private let launchAtLogin: any LaunchAtLoginControlling
     private let inputSourceIndicator: any InputSourceIndicatorControlling
@@ -67,13 +61,12 @@ final class OnboardingModel: ObservableObject {
         configuredLeftID: String?,
         configuredRightID: String?,
         thresholdMilliseconds: Int,
-        switchSoundsEnabled: Bool = false,
         mode: Mode = .firstLaunch,
         launchAtLogin: any LaunchAtLoginControlling = LaunchAtLoginController(),
         inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient = .live,
         onAccessibilityChange: @escaping () -> Void,
-        onFinish: @escaping (Result) -> Void
+        onFinish: @escaping (String, String, Int) -> Void
     ) {
         let isAccessibilityGranted = accessibility.isGranted()
         self.mode = mode
@@ -89,7 +82,6 @@ final class OnboardingModel: ObservableObject {
         selectedLeftID = selections.left
         selectedRightID = selections.right
         self.thresholdMilliseconds = Self.normalizedThreshold(thresholdMilliseconds)
-        self.switchSoundsEnabled = switchSoundsEnabled
         self.launchAtLogin = launchAtLogin
         self.inputSourceIndicator = inputSourceIndicator
         hideInputSourceIndicator = inputSourceIndicator.isHidden
@@ -200,16 +192,7 @@ final class OnboardingModel: ObservableObject {
                 return
             }
         }
-        onFinish(
-            Result(
-                configuration: AppConfiguration(
-                    leftSourceID: selectedLeftID,
-                    rightSourceID: selectedRightID,
-                    tapThresholdMilliseconds: thresholdMilliseconds
-                ),
-                switchSoundsEnabled: switchSoundsEnabled
-            )
-        )
+        onFinish(selectedLeftID, selectedRightID, thresholdMilliseconds)
     }
 
     func refreshLaunchAtLogin() {

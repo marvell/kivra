@@ -4,12 +4,10 @@ import os
 final class InputSourceStore {
     private final class PendingSelection {
         let targetID: String
-        let side: ShiftSide
-        let gate: SelectionGate
+        weak var gate: SelectionGate?
 
-        init(targetID: String, side: ShiftSide, gate: SelectionGate) {
+        init(targetID: String, gate: SelectionGate) {
             self.targetID = targetID
-            self.side = side
             self.gate = gate
         }
     }
@@ -17,18 +15,12 @@ final class InputSourceStore {
     private var sourcesByID: [String: InputSource] = [:]
     private var pendingSelection: PendingSelection?
     private let system: InputSourceSystem
-    private let onSelectionConfirmed: (ShiftSide) -> Void
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
     private(set) var configuration: AppConfiguration
 
-    init(
-        configuration: AppConfiguration,
-        system: InputSourceSystem,
-        onSelectionConfirmed: @escaping (ShiftSide) -> Void = { _ in }
-    ) {
+    init(configuration: AppConfiguration, system: InputSourceSystem) {
         self.configuration = configuration
         self.system = system
-        self.onSelectionConfirmed = onSelectionConfirmed
         refresh()
     }
 
@@ -68,7 +60,7 @@ final class InputSourceStore {
         guard gate.start() else {
             return
         }
-        pendingSelection = PendingSelection(targetID: target.id, side: side, gate: gate)
+        pendingSelection = PendingSelection(targetID: target.id, gate: gate)
 
         var result = system.selectSource(id: target.id)
         if result == .selected {
@@ -101,8 +93,11 @@ final class InputSourceStore {
         guard let pendingSelection else {
             return
         }
-        let gate = pendingSelection.gate
-        guard gate.acceptsSelectionConfirmation else {
+        guard let gate = pendingSelection.gate else {
+            self.pendingSelection = nil
+            return
+        }
+        guard gate.isPending else {
             self.pendingSelection = nil
             return
         }
@@ -111,11 +106,8 @@ final class InputSourceStore {
         }
 
         if sourceID == pendingSelection.targetID {
-            let confirmed = gate.confirmSelection()
+            gate.finish()
             self.pendingSelection = nil
-            if confirmed {
-                onSelectionConfirmed(pendingSelection.side)
-            }
         }
     }
 

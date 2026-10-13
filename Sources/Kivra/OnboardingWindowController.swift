@@ -22,9 +22,8 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         self.onClose = onClose
         self.onDismiss = onDismiss
 
-        let contentHeight = model.isSettingsMode ? 660.0 : 600.0
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: contentHeight),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false

@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences: AppPreferences
     private let accessibility: AccessibilityClient
     private let inputSources: InputSourceStore
-    private let switchSounds: SwitchSoundController
     private let launchAtLogin: LaunchAtLoginController
     private let inputSourceIndicator: InputSourceIndicatorController
     private let presentation: ApplicationPresentationController
@@ -27,14 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let configuration = preferences.configuration
         self.preferences = preferences
         accessibility = .live
-        let switchSounds = SwitchSoundController(isEnabled: preferences.switchSoundsEnabled)
-        self.switchSounds = switchSounds
         inputSources = InputSourceStore(
             configuration: configuration,
-            system: CarbonInputSourceSystem(),
-            onSelectionConfirmed: { side in
-                switchSounds.play(for: side)
-            }
+            system: CarbonInputSourceSystem()
         )
         launchAtLogin = LaunchAtLoginController()
         inputSourceIndicator = InputSourceIndicatorController()
@@ -132,7 +126,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 configuredLeftID: inputSources.configuration.leftSourceID,
                 configuredRightID: inputSources.configuration.rightSourceID,
                 thresholdMilliseconds: inputSources.configuration.tapThresholdMilliseconds,
-                switchSoundsEnabled: preferences.switchSoundsEnabled,
                 mode: mode,
                 launchAtLogin: launchAtLogin,
                 inputSourceIndicator: inputSourceIndicator,
@@ -140,8 +133,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()
                 },
-                onFinish: { [weak self] result in
-                    self?.finishOnboarding(result)
+                onFinish: { [weak self] leftID, rightID, thresholdMilliseconds in
+                    self?.finishOnboarding(
+                        leftID: leftID,
+                        rightID: rightID,
+                        thresholdMilliseconds: thresholdMilliseconds
+                    )
                 }
             )
             onboardingController = OnboardingWindowController(
@@ -179,12 +176,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusMenu()
     }
 
-    private func finishOnboarding(_ result: OnboardingModel.Result) {
-        preferences.configuration = result.configuration
-        preferences.switchSoundsEnabled = result.switchSoundsEnabled
-        switchSounds.setEnabled(result.switchSoundsEnabled)
-        inputSources.updateConfiguration(result.configuration)
-        monitor.updateThreshold(milliseconds: result.configuration.tapThresholdMilliseconds)
+    private func finishOnboarding(
+        leftID: String,
+        rightID: String,
+        thresholdMilliseconds: Int
+    ) {
+        var configuration = inputSources.configuration
+        configuration.leftSourceID = leftID
+        configuration.rightSourceID = rightID
+        configuration.tapThresholdMilliseconds = thresholdMilliseconds
+        preferences.configuration = configuration
+        inputSources.updateConfiguration(configuration)
+        monitor.updateThreshold(milliseconds: thresholdMilliseconds)
         preferences.onboardingCompleted = true
         onboardingController?.completeAndClose()
         onboardingController = nil

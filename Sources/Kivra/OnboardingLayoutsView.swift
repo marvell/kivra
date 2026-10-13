@@ -30,9 +30,6 @@ struct OnboardingLayoutsView: View {
                     )
 
                     tapThresholdConfiguration
-                    if model.isSettingsMode {
-                        OnboardingSwitchSoundsView(isEnabled: $model.switchSoundsEnabled)
-                    }
                     launchAtLoginConfiguration
                     OnboardingInputSourceIndicatorView(model: model)
 
