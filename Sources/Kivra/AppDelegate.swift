@@ -254,6 +254,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onCheckForUpdates: { [weak self] in
                     self?.updater.checkForUpdates()
                 },
+                onShowAbout: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                },
                 onQuit: {
                     NSApp.terminate(nil)
                 }

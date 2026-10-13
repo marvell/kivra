@@ -87,6 +87,7 @@ final class StatusMenuController: NSObject {
     private let onShowSettings: () -> Void
     private let onOpenPrivacySettings: () -> Void
     private let onCheckForUpdates: () -> Void
+    private let onShowAbout: () -> Void
     private let onQuit: () -> Void
     private let statusItem: NSStatusItem
     private var lastState: StatusMenuState?
@@ -97,6 +98,7 @@ final class StatusMenuController: NSObject {
         onShowSettings: @escaping () -> Void,
         onOpenPrivacySettings: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void,
+        onShowAbout: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.identity = identity
@@ -104,6 +106,7 @@ final class StatusMenuController: NSObject {
         self.onShowSettings = onShowSettings
         self.onOpenPrivacySettings = onOpenPrivacySettings
         self.onCheckForUpdates = onCheckForUpdates
+        self.onShowAbout = onShowAbout
         self.onQuit = onQuit
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -135,9 +138,14 @@ final class StatusMenuController: NSObject {
         )
         stateItem.isEnabled = false
         for title in state.layoutTitles {
-            let layoutItem = menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
-            layoutItem.isEnabled = false
+            let layoutItem = menu.addItem(
+                withTitle: title,
+                action: #selector(showSettings),
+                keyEquivalent: ""
+            )
+            layoutItem.target = self
             layoutItem.indentationLevel = 1
+            layoutItem.toolTip = "Change layouts in Settings"
         }
         menu.addItem(.separator())
 
@@ -161,8 +169,13 @@ final class StatusMenuController: NSObject {
             )
         }
 
+        menu.addItem(.separator())
+        addItem(
+            to: menu,
+            title: "About \(identity.displayName)",
+            action: #selector(showAbout)
+        )
         if state.canCheckForUpdates {
-            menu.addItem(.separator())
             addItem(
                 to: menu,
                 title: state.updateTitle,
@@ -241,6 +254,10 @@ final class StatusMenuController: NSObject {
 
     @objc private func checkForUpdates() {
         onCheckForUpdates()
+    }
+
+    @objc private func showAbout() {
+        onShowAbout()
     }
 
     @objc private func quit() {
