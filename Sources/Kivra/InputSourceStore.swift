@@ -14,6 +14,7 @@ final class InputSourceStore {
 
     private var sourcesByID: [String: InputSource] = [:]
     private var pendingSelection: PendingSelection?
+    private var canRefreshForMissingTarget = true
     private let system: InputSourceSystem
     private let logger = Logger(subsystem: "com.kivra.app", category: "input-source")
     private(set) var configuration: AppConfiguration
@@ -31,6 +32,7 @@ final class InputSourceStore {
 
     func refresh() {
         sourcesByID = system.refresh()
+        canRefreshForMissingTarget = true
     }
 
     func select(for side: ShiftSide, gate: SelectionGate) {
@@ -39,10 +41,13 @@ final class InputSourceStore {
         }
 
         var target = selectionTarget(for: side)
-        if target == nil {
+        if target == nil, configuredSource(for: side) != nil, canRefreshForMissingTarget {
             // The source may have been enabled before its distributed
-            // notification reached the main run loop.
+            // notification reached the main run loop. Refresh only once per
+            // snapshot: a removed source would otherwise rebuild the list on
+            // every tap while keyboard events are held.
             refresh()
+            canRefreshForMissingTarget = false
             target = selectionTarget(for: side)
         }
 

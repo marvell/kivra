@@ -32,6 +32,29 @@ final class InputSourceStoreTests: XCTestCase {
         XCTAssertEqual(system.selectedIDs, ["left"])
     }
 
+    func testMissingTargetRefreshesOnlyOnceUntilSourcesChange() {
+        let system = FakeInputSourceSystem(snapshots: [[]])
+        let store = makeStore(leftID: "left", system: system)
+
+        store.select(for: .left, gate: SelectionGate())
+        store.select(for: .left, gate: SelectionGate())
+        XCTAssertEqual(system.refreshCallCount, 2)
+
+        store.refresh()
+        store.select(for: .left, gate: SelectionGate())
+        XCTAssertEqual(system.refreshCallCount, 4)
+        XCTAssertEqual(system.selectedIDs, [])
+    }
+
+    func testUnconfiguredSideDoesNotRefresh() {
+        let system = FakeInputSourceSystem(snapshots: [[]])
+        let store = makeStore(system: system)
+
+        store.select(for: .left, gate: SelectionGate())
+
+        XCTAssertEqual(system.refreshCallCount, 1)
+    }
+
     func testAlreadySelectedCompletesWithoutSelecting() {
         let system = FakeInputSourceSystem(
             snapshots: [[InputSource(id: "left", name: "Left")]],
