@@ -34,6 +34,8 @@ The welcome guide takes care of the initial setup:
 1. Grant **Accessibility** access. Kivra needs this permission to recognize
    Shift taps; it does not read or store what you type.
 2. Choose a keyboard layout for **Left Shift** and another for **Right Shift**.
+   You can tap either Shift key right away to try them; the matching row
+   lights up.
 3. Choose whether Kivra should open automatically when you log in.
 4. Optionally enable **Hide input source indicator** if you experience a pause
    when typing immediately after switching layouts.
@@ -42,9 +44,9 @@ The welcome guide takes care of the initial setup:
 Kivra then lives behind the keyboard icon in the macOS menu bar. Open that
 menu at any time to see which layout each Shift key selects (select one to
 change it), pause Kivra, change its settings, check for updates, or quit the
-app. Changes in
-**Settings…** take effect immediately. The icon fades while Kivra is paused
-and shows an exclamation mark when it needs Accessibility access.
+app. Changes in **Settings…** take effect immediately. The icon fades while
+Kivra is paused and shows an exclamation mark when it needs Accessibility
+access.
 
 If fewer than two layouts appear, select **Open Keyboard Settings** and add
 another one in **Text Input → Edit**, then return to Kivra.

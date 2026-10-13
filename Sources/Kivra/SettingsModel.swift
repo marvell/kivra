@@ -9,9 +9,11 @@ final class SettingsModel: ObservableObject {
             if selectedRightID == selectedLeftID,
                 let alternativeID = LayoutSelection.alternative(to: selectedLeftID, in: sources)
             {
+                // The right side's observer applies the resolved pair.
                 selectedRightID = alternativeID
+            } else {
+                applyConfiguration()
             }
-            applyConfiguration()
         }
     }
     @Published var selectedRightID: String {

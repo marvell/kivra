@@ -65,6 +65,10 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    func shiftTapped(_ side: ShiftSide) {
+        model.recordShiftTap(side)
+    }
+
     func updateSources(_ sources: [InputSource]) {
         model.updateSources(sources)
     }

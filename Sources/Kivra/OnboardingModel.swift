@@ -18,17 +18,31 @@ final class OnboardingModel: ObservableObject {
     @Published var accessibilityGranted: Bool
     @Published var selectedLeftID: String {
         didSet {
-            guard selectedLeftID != oldValue,
-                selectedRightID == selectedLeftID,
+            guard selectedLeftID != oldValue else { return }
+            if selectedRightID == selectedLeftID,
                 let alternativeID = LayoutSelection.alternative(to: selectedLeftID, in: sources)
-            else {
-                return
+            {
+                // The right side's observer previews the resolved pair.
+                selectedRightID = alternativeID
+            } else {
+                previewConfiguration()
             }
-            selectedRightID = alternativeID
         }
     }
-    @Published var selectedRightID: String
-    @Published var thresholdMilliseconds: Int
+    @Published var selectedRightID: String {
+        didSet {
+            guard selectedRightID != oldValue else { return }
+            previewConfiguration()
+        }
+    }
+    @Published var thresholdMilliseconds: Int {
+        didSet {
+            guard thresholdMilliseconds != oldValue else { return }
+            previewConfiguration()
+        }
+    }
+    /// The Shift key the person just tapped, shown briefly so they can try their layouts.
+    @Published private(set) var highlightedSide: ShiftSide?
     @Published var isLaunchAtLoginEnabled: Bool
     @Published private(set) var launchAtLoginState: LaunchAtLoginState
     @Published private(set) var launchAtLoginError: String?
@@ -44,11 +58,13 @@ final class OnboardingModel: ObservableObject {
     @Published private(set) var sources: [InputSource]
     private let onAccessibilityChange: () -> Void
     private let onFinish: (String, String, Int) -> Void
+    private let onPreview: (String, String, Int) -> Void
     private let accessibility: AccessibilityClient
     private let launchAtLogin: any LaunchAtLoginControlling
     private let inputSourceIndicator: any InputSourceIndicatorControlling
     private var hasInputSourceIndicatorChanges = false
     private var permissionTask: Task<Void, Never>?
+    private var highlightTask: Task<Void, Never>?
 
     init(
         sources: [InputSource],
@@ -59,6 +75,7 @@ final class OnboardingModel: ObservableObject {
         inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient = .live,
         onAccessibilityChange: @escaping () -> Void,
+        onPreview: @escaping (String, String, Int) -> Void = { _, _, _ in },
         onFinish: @escaping (String, String, Int) -> Void
     ) {
         let isAccessibilityGranted = accessibility.isGranted()
@@ -81,7 +98,9 @@ final class OnboardingModel: ObservableObject {
         isLaunchAtLoginEnabled = true
         step = .welcome
         self.onAccessibilityChange = onAccessibilityChange
+        self.onPreview = onPreview
         self.onFinish = onFinish
+        previewConfiguration()
     }
 
     var canConfigureLayouts: Bool {
@@ -144,6 +163,19 @@ final class OnboardingModel: ObservableObject {
         // does not replace the layout being swapped in.
         selectedRightID = leftID
         selectedLeftID = rightID
+    }
+
+    func recordShiftTap(_ side: ShiftSide) {
+        highlightTask?.cancel()
+        highlightedSide = side
+        highlightTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(700))
+            } catch {
+                return
+            }
+            self?.highlightedSide = nil
+        }
     }
 
     func startPermissionObservation() {
@@ -225,6 +257,12 @@ final class OnboardingModel: ObservableObject {
         } else if !currentValue, step == .layouts {
             navigate(to: .permission, direction: .backward)
         }
+    }
+
+    /// Lets Shift taps use the selected layouts before setup is finished.
+    private func previewConfiguration() {
+        guard canConfigureLayouts else { return }
+        onPreview(selectedLeftID, selectedRightID, thresholdMilliseconds)
     }
 
     private func navigate(to destination: Step, direction: NavigationDirection) {

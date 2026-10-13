@@ -15,7 +15,7 @@ struct OnboardingLayoutsView: View {
                 .tracking(-0.5)
                 .padding(.top, 12)
 
-            Text("Assign one to each Shift key.")
+            Text("Assign one to each Shift key, then tap Shift to try it.")
                 .font(.system(size: 14, design: .rounded))
                 .foregroundStyle(.white.opacity(0.50))
                 .padding(.top, 6)
@@ -23,8 +23,13 @@ struct OnboardingLayoutsView: View {
             ScrollView {
                 VStack(spacing: 8) {
                     VStack(spacing: 8) {
-                        layoutPicker(title: "Left Shift", selection: $model.selectedLeftID)
                         layoutPicker(
+                            side: .left,
+                            title: "Left Shift",
+                            selection: $model.selectedLeftID
+                        )
+                        layoutPicker(
+                            side: .right,
                             title: "Right Shift",
                             selection: $model.selectedRightID,
                             excluding: model.selectedLeftID
@@ -229,15 +234,6 @@ struct OnboardingLayoutsView: View {
                     }
 
                     Spacer()
-
-                    Text(model.isLaunchAtLoginEnabled ? "ON" : "OFF")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .tracking(0.7)
-                        .foregroundStyle(
-                            model.isLaunchAtLoginEnabled
-                                ? OnboardingTheme.accent
-                                : .white.opacity(0.38)
-                        )
                 }
             }
             .toggleStyle(.switch)
@@ -313,19 +309,22 @@ struct OnboardingLayoutsView: View {
     }
 
     private func layoutPicker(
+        side: ShiftSide,
         title: String,
         selection: Binding<String>,
         excluding excludedID: String? = nil
     ) -> some View {
-        HStack(spacing: 13) {
+        let isHighlighted = model.highlightedSide == side
+        return HStack(spacing: 13) {
             Image(systemName: "shift.fill")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(OnboardingTheme.accent)
+                .foregroundStyle(isHighlighted ? .white : OnboardingTheme.accent)
                 .frame(width: 30, height: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(OnboardingTheme.accent.opacity(0.10))
+                        .fill(OnboardingTheme.accent.opacity(isHighlighted ? 1 : 0.10))
                 )
+                .scaleEffect(isHighlighted && !reduceMotion ? 1.08 : 1)
 
             Text(title)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -352,7 +351,13 @@ struct OnboardingLayoutsView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(OnboardingTheme.border, lineWidth: 1)
+                .stroke(
+                    isHighlighted ? OnboardingTheme.accent : OnboardingTheme.border,
+                    lineWidth: 1
+                )
         )
+        .animation(.easeOut(duration: 0.18), value: isHighlighted)
+        .accessibilityElement(children: .contain)
+        .accessibilityValue(isHighlighted ? "Tapped" : "")
     }
 }

@@ -30,6 +30,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
 
     private let inputSources: InputSourceStore
     private let onRunningStateChanged: @MainActor @Sendable () -> Void
+    private let onShiftTap: @MainActor @Sendable (ShiftSide) -> Void
     private let logger = Logger(subsystem: "com.kivra.app", category: "event-tap")
     private let signposter = OSSignposter(subsystem: "com.kivra.app", category: .pointsOfInterest)
     private let stateLock = NSLock()
@@ -48,10 +49,12 @@ final class ShiftEventMonitor: @unchecked Sendable {
     init(
         inputSources: InputSourceStore,
         thresholdMilliseconds: Int,
-        onRunningStateChanged: @escaping @MainActor @Sendable () -> Void
+        onRunningStateChanged: @escaping @MainActor @Sendable () -> Void,
+        onShiftTap: @escaping @MainActor @Sendable (ShiftSide) -> Void = { _ in }
     ) {
         self.inputSources = inputSources
         self.onRunningStateChanged = onRunningStateChanged
+        self.onShiftTap = onShiftTap
         state = State(interpreter: ShiftEventInterpreter(thresholdMilliseconds: thresholdMilliseconds))
     }
 
@@ -251,8 +254,10 @@ final class ShiftEventMonitor: @unchecked Sendable {
             "Input source selection", id: signposter.makeSignpostID(), "\(side.rawValue, privacy: .public)"
         )
 
-        Task { @MainActor [inputSources] in
+        Task { @MainActor [inputSources, onShiftTap] in
             inputSources.select(for: side, gate: gate)
+            // Report the tap after selecting so UI feedback never delays the switch.
+            onShiftTap(side)
         }
 
         let result = gate.wait(timeout: Self.selectionConfirmationTimeout)

@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         thresholdMilliseconds: inputSources.configuration.tapThresholdMilliseconds,
         onRunningStateChanged: { [weak self] in
             self?.updateStatusMenu()
+        },
+        onShiftTap: { [weak self] side in
+            self?.onboardingController?.shiftTapped(side)
         }
     )
     private var statusMenu: StatusMenuController?
@@ -156,6 +159,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()
                 },
+                onPreview: { [weak self] leftID, rightID, thresholdMilliseconds in
+                    self?.previewConfiguration(
+                        leftID: leftID,
+                        rightID: rightID,
+                        thresholdMilliseconds: thresholdMilliseconds
+                    )
+                },
                 onFinish: { [weak self] leftID, rightID, thresholdMilliseconds in
                     self?.finishOnboarding(
                         leftID: leftID,
@@ -174,6 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
         }
+        // Monitoring starts during setup so people can try their layouts.
+        accessibilityChanged()
         presentation.begin(.onboarding, activate: true)
         onboardingController?.present()
     }
@@ -186,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func accessibilityChanged() {
-        guard statusMenu != nil else {
+        guard statusMenu != nil || onboardingController != nil else {
             return
         }
         if accessibility.isGranted() {
@@ -220,15 +232,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rightID: String,
         thresholdMilliseconds: Int
     ) {
+        previewConfiguration(
+            leftID: leftID,
+            rightID: rightID,
+            thresholdMilliseconds: thresholdMilliseconds
+        )
+        preferences.configuration = inputSources.configuration
+        updateStatusMenu()
+    }
+
+    /// Uses a configuration for Shift taps without saving it.
+    private func previewConfiguration(
+        leftID: String,
+        rightID: String,
+        thresholdMilliseconds: Int
+    ) {
         var configuration = inputSources.configuration
         configuration.leftSourceID = leftID
         configuration.rightSourceID = rightID
         configuration.tapThresholdMilliseconds = thresholdMilliseconds
-        guard configuration != inputSources.configuration else { return }
-        preferences.configuration = configuration
         inputSources.updateConfiguration(configuration)
         monitor.updateThreshold(milliseconds: thresholdMilliseconds)
-        updateStatusMenu()
     }
 
     private func onboardingDismissed() {

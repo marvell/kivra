@@ -52,6 +52,51 @@ final class OnboardingModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectionsArePreviewedImmediately() {
+        var previews: [[String]] = []
+        let model = OnboardingModel(
+            sources: [source("a"), source("b"), source("c")],
+            configuredLeftID: "a",
+            configuredRightID: "b",
+            thresholdMilliseconds: 250,
+            inputSourceIndicator: FakeInputSourceIndicatorController(),
+            accessibility: accessibilityClient(),
+            onAccessibilityChange: {},
+            onPreview: { left, right, threshold in
+                previews.append([left, right, String(threshold)])
+            },
+            onFinish: { _, _, _ in }
+        )
+
+        model.selectedRightID = "c"
+        model.thresholdMilliseconds = 300
+        model.selectedLeftID = "c"
+
+        XCTAssertEqual(
+            previews,
+            [
+                ["a", "b", "250"],
+                ["a", "c", "250"],
+                ["a", "c", "300"],
+                ["c", "a", "300"],
+            ]
+        )
+    }
+
+    @MainActor
+    func testShiftTapIsHighlightedBriefly() async throws {
+        let model = makeModel(sources: [source("a"), source("b")], leftID: "a", rightID: "b")
+
+        model.recordShiftTap(.left)
+        XCTAssertEqual(model.highlightedSide, .left)
+        model.recordShiftTap(.right)
+        XCTAssertEqual(model.highlightedSide, .right)
+
+        try await Task.sleep(for: .milliseconds(900))
+        XCTAssertNil(model.highlightedSide)
+    }
+
+    @MainActor
     func testChangingLeftSourceResolvesRightSourceConflict() {
         let model = makeModel(
             sources: [source("a"), source("b"), source("c")],
