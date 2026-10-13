@@ -31,6 +31,7 @@ final class ShiftEventMonitor: @unchecked Sendable {
     private let inputSources: InputSourceStore
     private let onRunningStateChanged: @MainActor @Sendable () -> Void
     private let logger = Logger(subsystem: "com.kivra.app", category: "event-tap")
+    private let signposter = OSSignposter(subsystem: "com.kivra.app", category: .pointsOfInterest)
     private let stateLock = NSLock()
     private var state: State
 
@@ -245,11 +246,19 @@ final class ShiftEventMonitor: @unchecked Sendable {
             return
         }
 
+        // Measures how long keyboard events are held while the switch is confirmed.
+        let signpostState = signposter.beginInterval(
+            "Input source selection", id: signposter.makeSignpostID(), "\(side.rawValue, privacy: .public)"
+        )
+
         Task { @MainActor [inputSources] in
             inputSources.select(for: side, gate: gate)
         }
 
         let result = gate.wait(timeout: Self.selectionConfirmationTimeout)
+        signposter.endInterval(
+            "Input source selection", signpostState, "\(String(describing: result), privacy: .public)"
+        )
 
         stateLock.withLock {
             if state.pendingSelectionGate === gate {

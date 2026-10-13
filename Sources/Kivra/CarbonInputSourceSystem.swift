@@ -1,7 +1,9 @@
 import Carbon.HIToolbox
+import os
 
 @MainActor
 final class CarbonInputSourceSystem: InputSourceSystem {
+    private let signposter = OSSignposter(subsystem: "com.kivra.app", category: .pointsOfInterest)
     private var sourcesByID: [String: TISInputSource] = [:]
 
     func refresh() -> [String: InputSource] {
@@ -37,7 +39,9 @@ final class CarbonInputSourceSystem: InputSourceSystem {
             return .unavailable
         }
 
-        let status = TISSelectInputSource(source)
+        let status = signposter.withIntervalSignpost("TISSelectInputSource") {
+            TISSelectInputSource(source)
+        }
         return status == noErr ? .selected : .failed(status)
     }
 
