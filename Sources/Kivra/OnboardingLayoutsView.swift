@@ -4,7 +4,6 @@ struct OnboardingLayoutsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @ObservedObject var model: OnboardingModel
-    let dismiss: () -> Void
     @Binding var isTapThresholdExpanded: Bool
 
     private let applicationName = ApplicationIdentity.current.displayName
@@ -49,11 +48,11 @@ struct OnboardingLayoutsView: View {
 
             HStack(spacing: 10) {
                 OnboardingSecondaryButton(
-                    title: model.isSettingsMode ? "Cancel" : "Back",
-                    action: model.isSettingsMode ? dismiss : model.goBack
+                    title: "Back",
+                    action: model.goBack
                 )
                 OnboardingPrimaryButton(
-                    title: model.isSettingsMode ? "Save Changes" : "Start \(applicationName)",
+                    title: "Start \(applicationName)",
                     symbol: "checkmark",
                     action: model.finish
                 )
@@ -249,7 +248,7 @@ struct OnboardingLayoutsView: View {
             .accessibilityLabel("Open \(applicationName) at login")
             .accessibilityHint(
                 model.isLaunchAtLoginAvailable
-                    ? "Applies when you save changes"
+                    ? "Applies when you start \(applicationName)"
                     : "Available in the installed app"
             )
 

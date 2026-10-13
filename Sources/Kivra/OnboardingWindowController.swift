@@ -40,10 +40,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         hostingView.layer?.masksToBounds = true
 
         let applicationName = ApplicationIdentity.current.displayName
-        window.title =
-            model.mode == .firstLaunch
-            ? "Welcome to \(applicationName)"
-            : "\(applicationName) Settings"
+        window.title = "Welcome to \(applicationName)"
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.isOpaque = false

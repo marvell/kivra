@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OnboardingPermissionView: View {
     @ObservedObject var model: OnboardingModel
-    let dismiss: () -> Void
 
     private let applicationName = ApplicationIdentity.current.displayName
 
@@ -51,8 +50,8 @@ struct OnboardingPermissionView: View {
 
             HStack(spacing: 10) {
                 OnboardingSecondaryButton(
-                    title: model.isSettingsMode ? "Cancel" : "Back",
-                    action: model.isSettingsMode ? dismiss : model.goBack
+                    title: "Back",
+                    action: model.goBack
                 )
                 OnboardingPrimaryButton(
                     title: "Grant Access",

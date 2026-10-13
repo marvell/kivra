@@ -25,9 +25,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 0) {
                 brand
-                if !model.isSettingsMode {
-                    progress
-                }
+                progress
 
                 ZStack {
                     Group {
@@ -35,11 +33,10 @@ struct OnboardingView: View {
                         case .welcome:
                             OnboardingWelcomeView(model: model)
                         case .permission:
-                            OnboardingPermissionView(model: model, dismiss: dismiss)
+                            OnboardingPermissionView(model: model)
                         case .layouts:
                             OnboardingLayoutsView(
                                 model: model,
-                                dismiss: dismiss,
                                 isTapThresholdExpanded: $isTapThresholdExpanded
                             )
                         }
@@ -93,8 +90,8 @@ struct OnboardingView: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.cancelAction)
-        .help(model.isSettingsMode ? "Close settings" : "Close setup")
-        .accessibilityLabel(model.isSettingsMode ? "Close settings" : "Close setup")
+        .help("Close setup")
+        .accessibilityLabel("Close setup")
         .onHover { isExitHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isExitHovered)
     }

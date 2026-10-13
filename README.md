@@ -41,9 +41,9 @@ The welcome guide takes care of the initial setup:
 
 Kivra then lives behind the keyboard icon in the macOS menu bar. Open that
 menu at any time to see which layout each Shift key selects, pause Kivra,
-change its settings, check for updates, or quit the app. The icon fades while
-Kivra is paused and shows an exclamation mark when it needs Accessibility
-access.
+change its settings, check for updates, or quit the app. Changes in
+**Settings…** take effect immediately. The icon fades while Kivra is paused
+and shows an exclamation mark when it needs Accessibility access.
 
 If fewer than two layouts appear, select **Open Keyboard Settings** and add
 another one in **Text Input → Edit**, then return to Kivra.
@@ -58,9 +58,10 @@ Hiding the language popup near the text cursor in all apps may reduce typing
 delays after switching layouts. This uses an undocumented macOS setting, so its
 effect can change with macOS updates. Some apps may need to be restarted.
 
-Changes take effect only when you select **Start Kivra** or **Save Changes**.
-Saving without changing the switch leaves the system setting alone. Turn the
-switch off and save to show the indicator again, even if it was hidden manually.
+During setup, the change is applied when you select **Start Kivra**; finishing
+setup without changing the switch leaves the system setting alone. In
+**Settings…**, flipping the switch applies it immediately. Turn the switch off
+to show the indicator again, even if it was hidden manually.
 
 Kivra and Kivra Dev read the same macOS setting. Quitting either app does not
 restore the indicator.
@@ -99,7 +100,7 @@ is prepared. Select that item to open the update window. Choosing to be reminded
 later keeps the badge; skipping the version removes it.
 
 If you want the input source indicator back, turn off **Hide input source
-indicator** in settings and save before uninstalling. Then quit Kivra and move
+indicator** in settings before uninstalling. Then quit Kivra and move
 **Kivra** from Applications to the Bin.
 
 <details>

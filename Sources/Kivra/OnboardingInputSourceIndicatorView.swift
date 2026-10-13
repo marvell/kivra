@@ -31,7 +31,7 @@ struct OnboardingInputSourceIndicatorView: View {
             .tint(OnboardingTheme.accent)
             .accessibilityLabel("Hide the macOS input source indicator")
             .accessibilityHint(
-                "Reflects your macOS setting. Changes apply to all apps when you save."
+                "Reflects your macOS setting. Changes apply to all apps when you finish setup."
             )
 
             Text(

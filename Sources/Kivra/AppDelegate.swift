@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private var statusMenu: StatusMenuController?
     private var onboardingController: OnboardingWindowController?
+    private var settingsController: SettingsWindowController?
 
     override init() {
         let preferences = AppPreferences()
@@ -89,7 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func inputSourcesChanged() {
         inputSources.refresh()
-        onboardingController?.updateSources(inputSources.availableSources())
+        let sources = inputSources.availableSources()
+        onboardingController?.updateSources(sources)
+        settingsController?.updateSources(sources)
         updateStatusMenu()
     }
 
@@ -109,25 +112,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusMenu()
     }
 
-    private func showOnboarding() {
-        showWizard(mode: .firstLaunch)
-    }
-
     private func showSettings() {
-        showWizard(mode: .settings)
+        if settingsController == nil {
+            let model = SettingsModel(
+                sources: inputSources.availableSources(),
+                configuration: inputSources.configuration,
+                launchAtLogin: launchAtLogin,
+                inputSourceIndicator: inputSourceIndicator,
+                accessibility: accessibility,
+                onAccessibilityChange: { [weak self] in
+                    self?.accessibilityChanged()
+                },
+                onConfigurationChange: { [weak self] leftID, rightID, thresholdMilliseconds in
+                    self?.applyConfiguration(
+                        leftID: leftID,
+                        rightID: rightID,
+                        thresholdMilliseconds: thresholdMilliseconds
+                    )
+                }
+            )
+            settingsController = SettingsWindowController(
+                model: model,
+                onClose: { [weak self] in
+                    self?.presentation.end(.settings)
+                }
+            )
+        }
+        accessibilityChanged()
+        presentation.begin(.settings, activate: true)
+        settingsController?.present()
     }
 
-    private func showWizard(mode: OnboardingModel.Mode) {
-        accessibilityChanged()
-        let presentationReason: ApplicationPresentationController.Reason =
-            mode == .firstLaunch ? .onboarding : .settings
+    private func showOnboarding() {
         if onboardingController == nil {
             let model = OnboardingModel(
                 sources: inputSources.availableSources(),
                 configuredLeftID: inputSources.configuration.leftSourceID,
                 configuredRightID: inputSources.configuration.rightSourceID,
                 thresholdMilliseconds: inputSources.configuration.tapThresholdMilliseconds,
-                mode: mode,
                 launchAtLogin: launchAtLogin,
                 inputSourceIndicator: inputSourceIndicator,
                 accessibility: accessibility,
@@ -145,14 +167,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onboardingController = OnboardingWindowController(
                 model: model,
                 onClose: { [weak self] in
-                    self?.presentation.end(presentationReason)
+                    self?.presentation.end(.onboarding)
                 },
                 onDismiss: { [weak self] in
                     self?.onboardingDismissed()
                 }
             )
         }
-        presentation.begin(presentationReason, activate: true)
+        presentation.begin(.onboarding, activate: true)
         onboardingController?.present()
     }
 
@@ -182,17 +204,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rightID: String,
         thresholdMilliseconds: Int
     ) {
-        var configuration = inputSources.configuration
-        configuration.leftSourceID = leftID
-        configuration.rightSourceID = rightID
-        configuration.tapThresholdMilliseconds = thresholdMilliseconds
-        preferences.configuration = configuration
-        inputSources.updateConfiguration(configuration)
-        monitor.updateThreshold(milliseconds: thresholdMilliseconds)
+        applyConfiguration(
+            leftID: leftID,
+            rightID: rightID,
+            thresholdMilliseconds: thresholdMilliseconds
+        )
         preferences.onboardingCompleted = true
         onboardingController?.completeAndClose()
         onboardingController = nil
         startApplicationIfNeeded()
+    }
+
+    private func applyConfiguration(
+        leftID: String,
+        rightID: String,
+        thresholdMilliseconds: Int
+    ) {
+        var configuration = inputSources.configuration
+        configuration.leftSourceID = leftID
+        configuration.rightSourceID = rightID
+        configuration.tapThresholdMilliseconds = thresholdMilliseconds
+        guard configuration != inputSources.configuration else { return }
+        preferences.configuration = configuration
+        inputSources.updateConfiguration(configuration)
+        monitor.updateThreshold(milliseconds: thresholdMilliseconds)
+        updateStatusMenu()
     }
 
     private func onboardingDismissed() {

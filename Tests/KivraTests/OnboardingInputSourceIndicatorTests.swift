@@ -21,15 +21,6 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
         XCTAssertTrue(indicator.appliedValues.isEmpty)
     }
 
-    func testSettingsShowsCurrentSystemState() {
-        let indicator = FakeInputSourceIndicatorController()
-        indicator.isHidden = true
-        let model = makeModel(indicator: indicator, mode: .settings)
-
-        XCTAssertTrue(model.hideInputSourceIndicator)
-        XCTAssertTrue(indicator.appliedValues.isEmpty)
-    }
-
     func testChangingDraftDoesNotApplySystemSetting() {
         let indicator = FakeInputSourceIndicatorController()
         let model = makeModel(indicator: indicator)
@@ -68,17 +59,6 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
         XCTAssertNil(model.inputSourceIndicatorError)
     }
 
-    func testSavingSettingsCanOptOut() {
-        let indicator = FakeInputSourceIndicatorController()
-        indicator.isHidden = true
-        let model = makeModel(indicator: indicator, mode: .settings)
-        model.hideInputSourceIndicator = false
-
-        model.finish()
-
-        XCTAssertEqual(indicator.appliedValues, [false])
-    }
-
     func testSavingUnchangedManualSettingDoesNotWrite() {
         let indicator = FakeInputSourceIndicatorController()
         indicator.isHidden = true
@@ -95,7 +75,7 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
     func testManualSettingCanBeExplicitlyTurnedOff() {
         let indicator = FakeInputSourceIndicatorController()
         indicator.isHidden = true
-        let model = makeModel(indicator: indicator, mode: .settings)
+        let model = makeModel(indicator: indicator)
         model.hideInputSourceIndicator = false
 
         model.finish()
@@ -214,7 +194,6 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
 
     private func makeModel(
         indicator: FakeInputSourceIndicatorController,
-        mode: OnboardingModel.Mode = .firstLaunch,
         login: OnboardingLoginStub = OnboardingLoginStub(),
         onFinish: @escaping () -> Void = {}
     ) -> OnboardingModel {
@@ -223,7 +202,6 @@ final class OnboardingInputSourceIndicatorTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
-            mode: mode,
             launchAtLogin: login,
             inputSourceIndicator: indicator,
             accessibility: AccessibilityClient(isGranted: { true }, request: {}, openSettings: {}),

@@ -2,11 +2,6 @@ import SwiftUI
 
 @MainActor
 final class OnboardingModel: ObservableObject {
-    enum Mode: Equatable {
-        case firstLaunch
-        case settings
-    }
-
     enum Step: Int, CaseIterable {
         case welcome
         case permission
@@ -25,7 +20,7 @@ final class OnboardingModel: ObservableObject {
         didSet {
             guard selectedLeftID != oldValue,
                 selectedRightID == selectedLeftID,
-                let alternativeID = sources.first(where: { $0.id != selectedLeftID })?.id
+                let alternativeID = LayoutSelection.alternative(to: selectedLeftID, in: sources)
             else {
                 return
             }
@@ -47,7 +42,6 @@ final class OnboardingModel: ObservableObject {
     @Published private(set) var inputSourceIndicatorError: String?
 
     @Published private(set) var sources: [InputSource]
-    let mode: Mode
     private let onAccessibilityChange: () -> Void
     private let onFinish: (String, String, Int) -> Void
     private let accessibility: AccessibilityClient
@@ -61,7 +55,6 @@ final class OnboardingModel: ObservableObject {
         configuredLeftID: String?,
         configuredRightID: String?,
         thresholdMilliseconds: Int,
-        mode: Mode = .firstLaunch,
         launchAtLogin: any LaunchAtLoginControlling = LaunchAtLoginController(),
         inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient = .live,
@@ -69,11 +62,10 @@ final class OnboardingModel: ObservableObject {
         onFinish: @escaping (String, String, Int) -> Void
     ) {
         let isAccessibilityGranted = accessibility.isGranted()
-        self.mode = mode
         self.sources = sources
         self.accessibility = accessibility
         accessibilityGranted = isAccessibilityGranted
-        let selections = Self.resolveSelections(
+        let selections = LayoutSelection.resolve(
             sources: sources,
             leftID: configuredLeftID,
             rightID: configuredRightID
@@ -81,26 +73,15 @@ final class OnboardingModel: ObservableObject {
         let initialLaunchAtLoginState = launchAtLogin.state
         selectedLeftID = selections.left
         selectedRightID = selections.right
-        self.thresholdMilliseconds = Self.normalizedThreshold(thresholdMilliseconds)
+        self.thresholdMilliseconds = LayoutSelection.normalizedThreshold(thresholdMilliseconds)
         self.launchAtLogin = launchAtLogin
         self.inputSourceIndicator = inputSourceIndicator
         hideInputSourceIndicator = inputSourceIndicator.isHidden
         launchAtLoginState = initialLaunchAtLoginState
-        isLaunchAtLoginEnabled =
-            mode == .firstLaunch
-            ? true
-            : initialLaunchAtLoginState.isEnabled
-        if mode == .settings {
-            step = isAccessibilityGranted ? .layouts : .permission
-        } else {
-            step = .welcome
-        }
+        isLaunchAtLoginEnabled = true
+        step = .welcome
         self.onAccessibilityChange = onAccessibilityChange
         self.onFinish = onFinish
-    }
-
-    var isSettingsMode: Bool {
-        mode == .settings
     }
 
     var canConfigureLayouts: Bool {
@@ -212,9 +193,6 @@ final class OnboardingModel: ObservableObject {
     func refreshLaunchAtLogin() {
         launchAtLogin.refresh()
         launchAtLoginState = launchAtLogin.state
-        if mode == .settings {
-            isLaunchAtLoginEnabled = launchAtLoginState.isEnabled
-        }
     }
 
     func openLoginItemsSettings() {
@@ -222,7 +200,7 @@ final class OnboardingModel: ObservableObject {
     }
 
     func updateSources(_ updatedSources: [InputSource]) {
-        let selections = Self.resolveSelections(
+        let selections = LayoutSelection.resolve(
             sources: updatedSources,
             leftID: selectedLeftID,
             rightID: selectedRightID
@@ -242,9 +220,7 @@ final class OnboardingModel: ObservableObject {
     private func refreshPermission() {
         let currentValue = accessibility.isGranted()
         updateAccessibility(currentValue)
-        if isSettingsMode, !currentValue {
-            navigate(to: .permission, direction: .backward)
-        } else if currentValue, step == .permission {
+        if currentValue, step == .permission {
             navigate(to: .layouts, direction: .forward)
         } else if !currentValue, step == .layouts {
             navigate(to: .permission, direction: .backward)
@@ -261,27 +237,5 @@ final class OnboardingModel: ObservableObject {
         guard currentValue != accessibilityGranted else { return }
         accessibilityGranted = currentValue
         onAccessibilityChange()
-    }
-
-    private static func resolveSelections(
-        sources: [InputSource],
-        leftID: String?,
-        rightID: String?
-    ) -> (left: String, right: String) {
-        let left =
-            leftID.flatMap { id in
-                sources.contains { $0.id == id } ? id : nil
-            } ?? sources.first?.id ?? ""
-        let fallbackRight = sources.first { $0.id != left }?.id ?? left
-        let right =
-            rightID.flatMap { id in
-                sources.contains { $0.id == id && id != left } ? id : nil
-            } ?? fallbackRight
-        return (left, right)
-    }
-
-    private static func normalizedThreshold(_ milliseconds: Int) -> Int {
-        let clampedValue = min(max(milliseconds, 100), 500)
-        return Int((Double(clampedValue) / 50).rounded() * 50)
     }
 }

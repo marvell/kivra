@@ -12,35 +12,6 @@ final class OnboardingModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.step, .welcome)
-        XCTAssertFalse(model.isSettingsMode)
-    }
-
-    @MainActor
-    func testSettingsStartsAtLayoutsWhenAccessibilityIsGranted() {
-        let model = makeModel(
-            sources: [source("a"), source("b")],
-            leftID: "a",
-            rightID: "b",
-            mode: .settings,
-            accessibilityGranted: true
-        )
-
-        XCTAssertEqual(model.step, .layouts)
-        XCTAssertTrue(model.isSettingsMode)
-    }
-
-    @MainActor
-    func testSettingsStartsAtPermissionWhenAccessibilityIsNotGranted() {
-        let model = makeModel(
-            sources: [source("a"), source("b")],
-            leftID: "a",
-            rightID: "b",
-            mode: .settings,
-            accessibilityGranted: false
-        )
-
-        XCTAssertEqual(model.step, .permission)
-        XCTAssertTrue(model.isSettingsMode)
     }
 
     @MainActor
@@ -183,47 +154,6 @@ final class OnboardingModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsUsesCurrentLaunchAtLoginState() {
-        let launchAtLogin = FakeLaunchAtLoginController(state: .enabled)
-        let model = OnboardingModel(
-            sources: [source("a"), source("b")],
-            configuredLeftID: "a",
-            configuredRightID: "b",
-            thresholdMilliseconds: 250,
-            mode: .settings,
-            launchAtLogin: launchAtLogin,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
-            accessibility: accessibilityClient(),
-            onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
-        )
-
-        XCTAssertTrue(model.isLaunchAtLoginEnabled)
-    }
-
-    @MainActor
-    func testSettingsRefreshUsesCurrentLaunchAtLoginState() {
-        let launchAtLogin = FakeLaunchAtLoginController(state: .enabled)
-        let model = OnboardingModel(
-            sources: [source("a"), source("b")],
-            configuredLeftID: "a",
-            configuredRightID: "b",
-            thresholdMilliseconds: 250,
-            mode: .settings,
-            launchAtLogin: launchAtLogin,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
-            accessibility: accessibilityClient(),
-            onAccessibilityChange: {},
-            onFinish: { _, _, _ in }
-        )
-        launchAtLogin.state = .disabled
-
-        model.refreshLaunchAtLogin()
-
-        XCTAssertFalse(model.isLaunchAtLoginEnabled)
-    }
-
-    @MainActor
     func testFinishAppliesLaunchAtLoginSelectionBeforeCompleting() {
         let launchAtLogin = FakeLaunchAtLoginController(state: .disabled)
         var didFinish = false
@@ -305,7 +235,6 @@ final class OnboardingModelTests: XCTestCase {
         leftID: String?,
         rightID: String?,
         thresholdMilliseconds: Int = 250,
-        mode: OnboardingModel.Mode = .firstLaunch,
         accessibilityGranted: Bool = true
     ) -> OnboardingModel {
         OnboardingModel(
@@ -313,7 +242,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: leftID,
             configuredRightID: rightID,
             thresholdMilliseconds: thresholdMilliseconds,
-            mode: mode,
             inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(granted: accessibilityGranted),
             onAccessibilityChange: {},
