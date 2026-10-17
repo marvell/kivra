@@ -3,136 +3,153 @@ import SwiftUI
 struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: OnboardingModel
-    let dismiss: () -> Void
-    @State private var isExitHovered = false
-    @State private var isTapThresholdExpanded = false
-
-    private let applicationName = ApplicationIdentity.current.displayName
-    private let appVersion =
-        Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String
+    let shiftTaps: ShiftTapFeedback
 
     var body: some View {
-        ZStack {
-            Color(red: 0.055, green: 0.058, blue: 0.07)
-            RadialGradient(
-                colors: [OnboardingTheme.accent.opacity(0.09), .clear],
-                center: .top,
-                startRadius: 10,
-                endRadius: 360
-            )
-
-            VStack(spacing: 0) {
-                brand
-                progress
-
-                ZStack {
-                    Group {
-                        switch model.step {
-                        case .welcome:
-                            OnboardingWelcomeView(model: model)
-                        case .permission:
-                            OnboardingPermissionView(model: model)
-                        case .layouts:
-                            OnboardingLayoutsView(
-                                model: model,
-                                isTapThresholdExpanded: $isTapThresholdExpanded
-                            )
-                        }
+        VStack(spacing: 0) {
+            ZStack {
+                Group {
+                    switch model.step {
+                    case .welcome:
+                        OnboardingWelcomeView(model: model)
+                    case .permission:
+                        OnboardingPermissionView(model: model)
+                    case .layouts:
+                        OnboardingLayoutsView(model: model, shiftTaps: shiftTaps)
                     }
-                    .id(model.step)
-                    .transition(pageTransition)
                 }
+                .padding(.horizontal, 40)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .animation(.easeInOut(duration: reduceMotion ? 0.12 : 0.24), value: model.step)
+                .id(model.step)
+                .transition(pageTransition)
             }
-            .padding(.top, 27)
+            .clipped()
+            .animation(.easeInOut(duration: reduceMotion ? 0.12 : 0.24), value: model.step)
 
-            VStack {
-                HStack {
-                    Spacer()
-                    exitButton
+            footer
+        }
+        .frame(width: 560, height: 540)
+        .background(alignment: .top) { glow }
+    }
+
+    /// Tints the top of the window with the system accent color.
+    private var glow: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(
+                colors: [Color.accentColor.opacity(0.14), .clear],
+                startPoint: .top,
+                endPoint: .center
+            )
+            EllipticalGradient(
+                colors: [Color.accentColor.opacity(0.22), .clear],
+                center: .top,
+                endRadiusFraction: 0.5
+            )
+            .frame(height: 360)
+            .offset(y: -60)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+
+    private var footer: some View {
+        ZStack {
+            HStack {
+                if model.step != .welcome {
+                    Button(action: model.goBack) {
+                        Label("Back", systemImage: "chevron.left")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            .padding(.top, 14)
-            .padding(.trailing, 14)
+            stepIndicator
         }
-        .frame(minWidth: 620, minHeight: 600)
-        .foregroundStyle(.white)
+        .frame(height: 20)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+
+    private var stepIndicator: some View {
+        HStack(spacing: 6) {
+            ForEach(OnboardingModel.Step.allCases, id: \.rawValue) { step in
+                Capsule()
+                    .fill(step == model.step ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .frame(width: step == model.step ? 16 : 6, height: 6)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.step)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Step \(model.step.rawValue + 1) of \(OnboardingModel.Step.allCases.count)"
+        )
     }
 
     private var pageTransition: AnyTransition {
         guard !reduceMotion else {
             return .opacity
         }
-        let distance = 28.0
+        let distance = 24.0
         let insertionOffset = model.navigationDirection == .forward ? distance : -distance
         return .asymmetric(
             insertion: .opacity.combined(with: .offset(x: insertionOffset)),
             removal: .opacity.combined(with: .offset(x: -insertionOffset))
         )
     }
+}
 
-    private var exitButton: some View {
-        Button(action: dismiss) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(isExitHovered ? 0.08 : 0.025))
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isExitHovered ? 0.62 : 0.24))
-            }
-            .frame(width: 26, height: 26)
-            .contentShape(Circle())
+/// The main action of a setup step, placed where the eye lands after reading.
+struct OnboardingPrimaryButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .frame(minWidth: 200)
         }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.cancelAction)
-        .help("Close setup")
-        .accessibilityLabel("Close setup")
-        .onHover { isExitHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isExitHovered)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.extraLarge)
+        .keyboardShortcut(.defaultAction)
     }
+}
 
-    private var brand: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(OnboardingTheme.accent)
-                Image(systemName: "command")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-            }
-            .frame(width: 25, height: 25)
+/// The title and explanation shared by every setup step.
+struct OnboardingHeader: View {
+    let title: String
+    let message: String
 
-            Text(applicationName)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-
-            if let appVersion {
-                Text("v\(appVersion)")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.28))
-                    .accessibilityLabel("Version \(appVersion)")
-            }
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.largeTitle.weight(.bold))
+            Text(message)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .multilineTextAlignment(.center)
     }
+}
 
-    private var progress: some View {
-        HStack(spacing: 6) {
-            ForEach(OnboardingModel.Step.allCases, id: \.rawValue) { step in
-                Capsule()
-                    .fill(
-                        step == model.step
-                            ? OnboardingTheme.accent
-                            : Color.white.opacity(0.13)
-                    )
-                    .frame(width: step == model.step ? 18 : 6, height: 6)
+struct OnboardingLaunchAtLoginToggle: View {
+    @ObservedObject var model: OnboardingModel
+
+    private let applicationName = ApplicationIdentity.current.displayName
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            LaunchAtLoginToggle(
+                isOn: $model.isLaunchAtLoginEnabled,
+                isAvailable: model.isLaunchAtLoginAvailable,
+                requiresApproval: model.launchAtLoginRequiresApproval,
+                error: model.launchAtLoginError,
+                openLoginItemsSettings: model.openLoginItemsSettings
+            ) {
+                Text("Open \(applicationName) at login")
             }
+            .toggleStyle(.checkbox)
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.step)
-        .padding(.top, 17)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(model.step.rawValue + 1) of \(OnboardingModel.Step.allCases.count)")
     }
 }

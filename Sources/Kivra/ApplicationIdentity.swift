@@ -10,6 +10,7 @@ struct ApplicationIdentity: Equatable {
 
     let displayName: String
     let variant: Variant
+    let version: String?
 
     var isDevelopment: Bool {
         variant == .dev
@@ -17,6 +18,7 @@ struct ApplicationIdentity: Equatable {
 
     init(infoDictionary: [String: Any]) {
         displayName = infoDictionary["CFBundleDisplayName"] as? String ?? "Kivra"
+        version = infoDictionary["CFBundleShortVersionString"] as? String
         variant =
             Variant(
                 rawValue: infoDictionary["KivraBuildVariant"] as? String ?? Variant.stable.rawValue

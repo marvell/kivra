@@ -39,6 +39,8 @@ final class SettingsModel: ObservableObject {
     private let inputSourceIndicator: any InputSourceIndicatorControlling
     private let onAccessibilityChange: () -> Void
     private let onConfigurationChange: (String, String, Int) -> Void
+    /// Checks for updates on request; nil when this build can't update itself.
+    let onCheckForUpdates: (() -> Void)?
 
     init(
         sources: [InputSource],
@@ -47,6 +49,7 @@ final class SettingsModel: ObservableObject {
         inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient,
         onAccessibilityChange: @escaping () -> Void,
+        onCheckForUpdates: (() -> Void)? = nil,
         onConfigurationChange: @escaping (String, String, Int) -> Void
     ) {
         let selections = LayoutSelection.resolve(
@@ -68,6 +71,7 @@ final class SettingsModel: ObservableObject {
         self.inputSourceIndicator = inputSourceIndicator
         self.onAccessibilityChange = onAccessibilityChange
         self.onConfigurationChange = onConfigurationChange
+        self.onCheckForUpdates = onCheckForUpdates
     }
 
     var canConfigureLayouts: Bool {

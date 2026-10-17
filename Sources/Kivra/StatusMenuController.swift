@@ -16,31 +16,10 @@ struct StatusMenuState: Equatable {
                 "Accessibility permission required"
             }
         }
-
-        var actionTitle: String {
-            switch self {
-            case .active:
-                "Pause"
-            case .paused:
-                "Resume"
-            case .permissionRequired:
-                "Grant Access…"
-            }
-        }
     }
 
     let monitoring: Monitoring
-    let canCheckForUpdates: Bool
     var updateAvailability: UpdateAvailability?
-    var leftLayoutName: String?
-    var rightLayoutName: String?
-
-    var layoutTitles: [String] {
-        [
-            "Left Shift: \(leftLayoutName ?? "Not available")",
-            "Right Shift: \(rightLayoutName ?? "Not available")",
-        ]
-    }
 
     var statusIcon: StatusIcon {
         if monitoring == .permissionRequired {
@@ -52,11 +31,7 @@ struct StatusMenuState: Equatable {
         )
     }
 
-    var updateTitle: String {
-        updateAvailability?.title ?? "Check for Updates…"
-    }
-
-    var showsPrivacySettings: Bool {
+    var needsPermission: Bool {
         monitoring == .permissionRequired
     }
 }
@@ -87,7 +62,6 @@ final class StatusMenuController: NSObject {
     private let onShowSettings: () -> Void
     private let onOpenPrivacySettings: () -> Void
     private let onCheckForUpdates: () -> Void
-    private let onShowAbout: () -> Void
     private let onQuit: () -> Void
     private let statusItem: NSStatusItem
     private var lastState: StatusMenuState?
@@ -98,7 +72,6 @@ final class StatusMenuController: NSObject {
         onShowSettings: @escaping () -> Void,
         onOpenPrivacySettings: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void,
-        onShowAbout: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.identity = identity
@@ -106,7 +79,6 @@ final class StatusMenuController: NSObject {
         self.onShowSettings = onShowSettings
         self.onOpenPrivacySettings = onOpenPrivacySettings
         self.onCheckForUpdates = onCheckForUpdates
-        self.onShowAbout = onShowAbout
         self.onQuit = onQuit
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -131,59 +103,36 @@ final class StatusMenuController: NSObject {
         statusItem.button?.setAccessibilityLabel(description)
 
         let menu = NSMenu()
-        let stateItem = menu.addItem(
-            withTitle: state.monitoring.title,
-            action: nil,
-            keyEquivalent: ""
-        )
-        stateItem.isEnabled = false
-        for title in state.layoutTitles {
-            let layoutItem = menu.addItem(
-                withTitle: title,
-                action: #selector(showSettings),
-                keyEquivalent: ""
+        if state.needsPermission {
+            let permissionItem = addItem(
+                to: menu,
+                title: "Allow Accessibility Access…",
+                action: #selector(openPrivacySettings)
             )
-            layoutItem.target = self
-            layoutItem.indentationLevel = 1
-            layoutItem.toolTip = "Change layouts in Settings"
+            permissionItem.image = NSImage(
+                systemSymbolName: "exclamationmark.triangle.fill",
+                accessibilityDescription: nil
+            )
+        } else {
+            addItem(
+                to: menu,
+                title: "\(state.monitoring == .active ? "Pause" : "Resume") \(identity.displayName)",
+                action: #selector(toggleMonitoring)
+            )
         }
         menu.addItem(.separator())
 
-        addItem(
-            to: menu,
-            title: state.monitoring.actionTitle,
-            action: #selector(toggleMonitoring)
-        )
+        if let update = state.updateAvailability {
+            // Updates are checked automatically, so the menu only mentions
+            // one that is waiting; manual checks live in Settings.
+            addItem(to: menu, title: update.title, action: #selector(checkForUpdates))
+        }
         addItem(
             to: menu,
             title: "Settings…",
             action: #selector(showSettings),
             keyEquivalent: ","
         )
-
-        if state.showsPrivacySettings {
-            addItem(
-                to: menu,
-                title: "Open Privacy Settings",
-                action: #selector(openPrivacySettings)
-            )
-        }
-
-        menu.addItem(.separator())
-        addItem(
-            to: menu,
-            title: "About \(identity.displayName)",
-            action: #selector(showAbout)
-        )
-        if state.canCheckForUpdates {
-            addItem(
-                to: menu,
-                title: state.updateTitle,
-                action: #selector(checkForUpdates)
-            )
-        }
-
-        menu.addItem(.separator())
         addItem(
             to: menu,
             title: "Quit \(identity.displayName)",
@@ -226,18 +175,20 @@ final class StatusMenuController: NSObject {
         return image
     }
 
+    @discardableResult
     private func addItem(
         to menu: NSMenu,
         title: String,
         action: Selector,
         keyEquivalent: String = ""
-    ) {
+    ) -> NSMenuItem {
         let item = menu.addItem(
             withTitle: title,
             action: action,
             keyEquivalent: keyEquivalent
         )
         item.target = self
+        return item
     }
 
     @objc private func toggleMonitoring() {
@@ -254,10 +205,6 @@ final class StatusMenuController: NSObject {
 
     @objc private func checkForUpdates() {
         onCheckForUpdates()
-    }
-
-    @objc private func showAbout() {
-        onShowAbout()
     }
 
     @objc private func quit() {

@@ -6,17 +6,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let model: SettingsModel
     private let onClose: () -> Void
 
-    init(model: SettingsModel, onClose: @escaping () -> Void) {
+    init(model: SettingsModel, shiftTaps: ShiftTapFeedback, onClose: @escaping () -> Void) {
         self.model = model
         self.onClose = onClose
 
-        let hostingController = NSHostingController(rootView: SettingsView(model: model))
+        let hostingController = NSHostingController(
+            rootView: SettingsView(model: model, shiftTaps: shiftTaps)
+        )
         hostingController.sizingOptions = [.preferredContentSize]
         let window = NSWindow(contentViewController: hostingController)
         window.title = "\(ApplicationIdentity.current.displayName) Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.center()
 
         super.init(window: window)
         window.delegate = self
@@ -29,8 +30,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func present() {
         model.refresh()
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
+        showCentered()
+    }
+
+    var isShowingShiftKeys: Bool {
+        window?.isKeyWindow == true
     }
 
     func updateSources(_ sources: [InputSource]) {

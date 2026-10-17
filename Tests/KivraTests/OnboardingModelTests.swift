@@ -59,7 +59,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onPreview: { left, right, threshold in
@@ -69,7 +68,6 @@ final class OnboardingModelTests: XCTestCase {
         )
 
         model.selectedRightID = "c"
-        model.thresholdMilliseconds = 300
         model.selectedLeftID = "c"
 
         XCTAssertEqual(
@@ -77,23 +75,24 @@ final class OnboardingModelTests: XCTestCase {
             [
                 ["a", "b", "250"],
                 ["a", "c", "250"],
-                ["a", "c", "300"],
-                ["c", "a", "300"],
+                ["c", "a", "250"],
             ]
         )
     }
 
     @MainActor
-    func testShiftTapIsHighlightedBriefly() async throws {
-        let model = makeModel(sources: [source("a"), source("b")], leftID: "a", rightID: "b")
+    func testWelcomeDemoTypesInEachLayoutsLanguage() {
+        let model = makeModel(
+            sources: [
+                InputSource(id: "a", name: "ABC", languageCode: "en"),
+                InputSource(id: "b", name: "Russian", languageCode: "ru"),
+            ],
+            leftID: "a",
+            rightID: "b"
+        )
 
-        model.recordShiftTap(.left)
-        XCTAssertEqual(model.highlightedSide, .left)
-        model.recordShiftTap(.right)
-        XCTAssertEqual(model.highlightedSide, .right)
-
-        try await Task.sleep(for: .milliseconds(900))
-        XCTAssertNil(model.highlightedSide)
+        XCTAssertEqual(model.selectedLeftGreeting, "Hello")
+        XCTAssertEqual(model.selectedRightGreeting, "Привет")
     }
 
     @MainActor
@@ -140,19 +139,7 @@ final class OnboardingModelTests: XCTestCase {
     }
 
     @MainActor
-    func testInitialThresholdUsesConfiguredValue() {
-        let model = makeModel(
-            sources: [source("a"), source("b")],
-            leftID: "a",
-            rightID: "b",
-            thresholdMilliseconds: 300
-        )
-
-        XCTAssertEqual(model.thresholdMilliseconds, 300)
-    }
-
-    @MainActor
-    func testFinishPassesSelectedLayoutsAndThreshold() {
+    func testFinishPassesSelectedLayoutsAndConfiguredThreshold() {
         var completedLeftID: String?
         var completedRightID: String?
         var completedThreshold: Int?
@@ -160,8 +147,7 @@ final class OnboardingModelTests: XCTestCase {
             sources: [source("a"), source("b")],
             configuredLeftID: "a",
             configuredRightID: "b",
-            thresholdMilliseconds: 250,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
+            thresholdMilliseconds: 350,
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { leftID, rightID, thresholdMilliseconds in
@@ -171,7 +157,6 @@ final class OnboardingModelTests: XCTestCase {
             }
         )
 
-        model.thresholdMilliseconds = 350
         model.finish()
 
         XCTAssertEqual(completedLeftID, "a")
@@ -188,7 +173,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }
@@ -208,7 +192,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
@@ -233,7 +216,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredRightID: "b",
             thresholdMilliseconds: 250,
             launchAtLogin: launchAtLogin,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in
@@ -255,7 +237,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: "a",
             configuredRightID: "b",
             thresholdMilliseconds: 250,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(
                 granted: false,
                 request: { requested = true }
@@ -267,6 +248,7 @@ final class OnboardingModelTests: XCTestCase {
         model.requestAccessibility()
 
         XCTAssertTrue(requested)
+        XCTAssertTrue(model.hasRequestedAccessibility)
         XCTAssertFalse(model.accessibilityGranted)
     }
 
@@ -287,7 +269,6 @@ final class OnboardingModelTests: XCTestCase {
             configuredLeftID: leftID,
             configuredRightID: rightID,
             thresholdMilliseconds: thresholdMilliseconds,
-            inputSourceIndicator: FakeInputSourceIndicatorController(),
             accessibility: accessibilityClient(granted: accessibilityGranted),
             onAccessibilityChange: {},
             onFinish: { _, _, _ in }

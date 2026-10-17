@@ -1,20 +1,17 @@
 import AppKit
 import SwiftUI
 
-private final class OnboardingWindow: NSWindow {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-}
-
 @MainActor
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private let model: OnboardingModel
     private let onClose: () -> Void
     private let onDismiss: () -> Void
     private var isCompleting = false
+    private var isConfirmingQuit = false
 
     init(
         model: OnboardingModel,
+        shiftTaps: ShiftTapFeedback,
         onClose: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -22,32 +19,17 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         self.onClose = onClose
         self.onDismiss = onDismiss
 
-        let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
+        let hostingController = NSHostingController(
+            rootView: OnboardingView(model: model, shiftTaps: shiftTaps)
         )
-        let contentView = OnboardingView(
-            model: model,
-            dismiss: { [weak window] in window?.close() }
-        )
-        .preferredColorScheme(.dark)
-        let hostingView = NSHostingView(rootView: contentView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = 18
-        hostingView.layer?.cornerCurve = .continuous
-        hostingView.layer?.masksToBounds = true
-
-        let applicationName = ApplicationIdentity.current.displayName
-        window.title = "Welcome to \(applicationName)"
+        hostingController.sizingOptions = [.preferredContentSize]
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Welcome to \(ApplicationIdentity.current.displayName)"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
-        window.contentView = hostingView
-        window.center()
 
         super.init(window: window)
         window.delegate = self
@@ -61,12 +43,12 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     func present() {
         model.refreshLaunchAtLogin()
         model.startPermissionObservation()
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
+        showCentered()
     }
 
-    func shiftTapped(_ side: ShiftSide) {
-        model.recordShiftTap(side)
+    /// Whether setup is in front on the step where people try their layouts.
+    var isShowingShiftKeys: Bool {
+        window?.isKeyWindow == true && model.step == .layouts
     }
 
     func updateSources(_ sources: [InputSource]) {
@@ -76,6 +58,35 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     func completeAndClose() {
         isCompleting = true
         close()
+    }
+
+    /// Escape closes setup, like the Close button.
+    override func cancelOperation(_ sender: Any?) {
+        window?.performClose(sender)
+    }
+
+    /// Kivra quits when setup closes unfinished, so it asks first.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !isCompleting else { return true }
+        guard !isConfirmingQuit else { return false }
+        isConfirmingQuit = true
+
+        let applicationName = ApplicationIdentity.current.displayName
+        let alert = NSAlert()
+        alert.messageText = "Quit \(applicationName)?"
+        alert.informativeText =
+            "\(applicationName) can switch layouts once setup is finished. "
+            + "Next time you open it, setup starts again."
+        alert.addButton(withTitle: "Quit")
+        // Escape picks Cancel and keeps setup open.
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: sender) { [weak self] response in
+            self?.isConfirmingQuit = false
+            if response == .alertFirstButtonReturn {
+                sender.close()
+            }
+        }
+        return false
     }
 
     func windowWillClose(_ notification: Notification) {

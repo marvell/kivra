@@ -1,363 +1,73 @@
 import SwiftUI
 
 struct OnboardingLayoutsView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openURL) private var openURL
     @ObservedObject var model: OnboardingModel
-    @Binding var isTapThresholdExpanded: Bool
+    @ObservedObject var shiftTaps: ShiftTapFeedback
 
     private let applicationName = ApplicationIdentity.current.displayName
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("Choose your layouts")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .tracking(-0.5)
-                .padding(.top, 12)
-
-            Text("Assign one to each Shift key, then tap Shift to try it.")
-                .font(.system(size: 14, design: .rounded))
-                .foregroundStyle(.white.opacity(0.50))
-                .padding(.top, 6)
-
-            ScrollView {
-                VStack(spacing: 8) {
-                    VStack(spacing: 8) {
-                        layoutPicker(
-                            side: .left,
-                            title: "Left Shift",
-                            selection: $model.selectedLeftID
-                        )
-                        layoutPicker(
-                            side: .right,
-                            title: "Right Shift",
-                            selection: $model.selectedRightID,
-                            excluding: model.selectedLeftID
-                        )
-                    }
-                    .overlay { swapButton }
-
-                    tapThresholdConfiguration
-                    launchAtLoginConfiguration
-                    OnboardingInputSourceIndicatorView(model: model)
-
-                    if model.sources.count < 2 {
-                        missingLayoutsNotice
-                    }
-                }
-                .frame(maxWidth: 420)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
-            .frame(maxHeight: .infinity)
-
-            HStack(spacing: 10) {
-                OnboardingSecondaryButton(
-                    title: "Back",
-                    action: model.goBack
-                )
-                OnboardingPrimaryButton(
-                    title: "Start \(applicationName)",
-                    symbol: "checkmark",
-                    action: model.finish
-                )
-                .disabled(!model.canConfigureLayouts)
-                .opacity(model.canConfigureLayouts ? 1 : 0.42)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.bottom, 16)
-        }
-        .padding(.horizontal, 42)
-    }
-
-    private var swapButton: some View {
-        Button(action: model.swapLayouts) {
-            Image(systemName: "arrow.up.arrow.down")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white.opacity(model.canConfigureLayouts ? 0.70 : 0.25))
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(Color(red: 0.12, green: 0.12, blue: 0.14)))
-                .overlay(Circle().stroke(OnboardingTheme.border, lineWidth: 1))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!model.canConfigureLayouts)
-        .help("Swap layouts")
-        .accessibilityLabel("Swap layouts")
-    }
-
-    private var missingLayoutsNotice: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-            Text("\(applicationName) needs two enabled keyboard layouts.")
-                .foregroundStyle(.white.opacity(0.70))
             Spacer()
-            Button("Open Keyboard Settings") {
-                openURL(Self.keyboardSettingsURL)
-            }
-            .buttonStyle(.plain)
-        }
-        .font(.system(size: 12, weight: .medium, design: .rounded))
-        .foregroundStyle(OnboardingTheme.accent)
-        .padding(.horizontal, 14)
-        .frame(height: 40)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OnboardingTheme.accent.opacity(0.08))
-        )
-    }
 
-    private static let keyboardSettingsURL = URL(
-        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension"
-    )!
-
-    private var tapThresholdConfiguration: some View {
-        VStack(spacing: 0) {
-            Button {
-                isTapThresholdExpanded.toggle()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "timer")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(OnboardingTheme.accent)
-                        .frame(width: 30, height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(OnboardingTheme.accent.opacity(0.10))
-                        )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Tap threshold")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        Text("\(model.thresholdMilliseconds) ms")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.42))
-                            .contentTransition(.numericText())
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.42))
-                        .rotationEffect(.degrees(isTapThresholdExpanded ? 180 : 0))
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 50)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Tap threshold")
-            .accessibilityValue(
-                "\(model.thresholdMilliseconds) milliseconds, "
-                    + (isTapThresholdExpanded ? "expanded" : "collapsed")
-            )
-            .accessibilityHint(
-                isTapThresholdExpanded
-                    ? "Hides optional tap timing settings"
-                    : "Shows optional tap timing settings"
+            OnboardingHeader(
+                title: "Choose Your Layouts",
+                message: "Click a layout name to change it."
             )
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Maximum time Shift can be held")
-                    Spacer()
-                    Text("\(model.thresholdMilliseconds) ms")
-                        .foregroundStyle(OnboardingTheme.accent)
-                        .contentTransition(.numericText())
-                }
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.48))
-
-                Slider(
-                    value: Binding(
-                        get: { Double(model.thresholdMilliseconds) },
-                        set: { model.thresholdMilliseconds = Int($0.rounded()) }
-                    ),
-                    in: 100...500,
-                    step: 50
-                )
-                .tint(OnboardingTheme.accent)
-                .accessibilityLabel("Tap threshold in milliseconds")
-
-                HStack {
-                    Text("Quick")
-                    Spacer()
-                    Text("Relaxed")
-                }
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.32))
-            }
-            .padding(.horizontal, 15)
-            .padding(.bottom, 10)
-            .frame(height: isTapThresholdExpanded ? 72 : 0, alignment: .top)
-            .clipped()
-            .opacity(isTapThresholdExpanded ? 1 : 0)
-            .allowsHitTesting(isTapThresholdExpanded)
-            .accessibilityHidden(!isTapThresholdExpanded)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OnboardingTheme.panel)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(OnboardingTheme.border, lineWidth: 1)
-        )
-        .animation(
-            reduceMotion ? nil : .spring(response: 0.30, dampingFraction: 0.88),
-            value: isTapThresholdExpanded
-        )
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.16),
-            value: model.thresholdMilliseconds
-        )
-    }
-
-    private var launchAtLoginConfiguration: some View {
-        VStack(spacing: 0) {
-            Toggle(isOn: $model.isLaunchAtLoginEnabled) {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.up.forward.app.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(OnboardingTheme.accent)
-                        .frame(width: 30, height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(OnboardingTheme.accent.opacity(0.10))
-                        )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Open \(applicationName) at login")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    }
-
-                    Spacer()
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(OnboardingTheme.accent)
-            .padding(.horizontal, 14)
-            .frame(height: 50)
-            .disabled(!model.isLaunchAtLoginAvailable)
-            .accessibilityLabel("Open \(applicationName) at login")
-            .accessibilityHint(
-                model.isLaunchAtLoginAvailable
-                    ? "Applies when you start \(applicationName)"
-                    : "Available in the installed app"
+            ShiftKeysView(
+                sources: model.sources,
+                leftID: $model.selectedLeftID,
+                rightID: $model.selectedRightID,
+                pressedSide: shiftTaps.highlightedSide,
+                canSwap: model.canConfigureLayouts,
+                swap: model.swapLayouts
             )
+            .frame(maxWidth: 440)
+            .padding(.top, 28)
 
-            if model.launchAtLoginRequiresApproval {
-                launchAtLoginStatus(
-                    symbol: "exclamationmark.circle.fill",
-                    "Allow it in Login Items.",
-                    color: Color(red: 1.0, green: 0.68, blue: 0.30),
-                    action: model.openLoginItemsSettings
-                )
-            } else if let error = model.launchAtLoginError {
-                launchAtLoginStatus(
-                    symbol: "exclamationmark.triangle.fill",
-                    error,
-                    color: OnboardingTheme.accent
-                )
+            if model.sources.count < 2 {
+                MissingLayoutsNotice()
+                    .padding(.top, 20)
+            } else {
+                tryItChecklist
+                    .padding(.top, 20)
             }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OnboardingTheme.panel)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(OnboardingTheme.border, lineWidth: 1)
-        )
-    }
-
-    private func launchAtLoginStatus(
-        symbol: String,
-        _ message: String,
-        color: Color,
-        action: (() -> Void)? = nil
-    ) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(color)
-
-            Text(message)
-                .lineLimit(1)
 
             Spacer()
 
-            if let action {
-                Button("Open Settings", action: action)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(color)
+            VStack(spacing: 14) {
+                OnboardingLaunchAtLoginToggle(model: model)
+                OnboardingPrimaryButton(title: "Start Using \(applicationName)", action: model.finish)
+                    .disabled(!model.canConfigureLayouts)
             }
-        }
-        .font(.system(size: 11, weight: .medium, design: .rounded))
-        .foregroundStyle(.white.opacity(0.50))
-        .padding(.horizontal, 12)
-        .frame(height: 34)
-        .background(Color.white.opacity(0.025))
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.white.opacity(0.07))
-                .frame(height: 1)
+            .padding(.bottom, 20)
         }
     }
 
-    private func layoutPicker(
-        side: ShiftSide,
-        title: String,
-        selection: Binding<String>,
-        excluding excludedID: String? = nil
-    ) -> some View {
-        let isHighlighted = model.highlightedSide == side
-        return HStack(spacing: 13) {
-            Image(systemName: "shift.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isHighlighted ? .white : OnboardingTheme.accent)
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(OnboardingTheme.accent.opacity(isHighlighted ? 1 : 0.10))
-                )
-                .scaleEffect(isHighlighted && !reduceMotion ? 1.08 : 1)
-
-            Text(title)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-
-            Spacer()
-
-            Picker(title, selection: selection) {
-                if model.sources.isEmpty {
-                    Text("No layouts found").tag("")
-                }
-                ForEach(model.sources.filter { $0.id != excludedID }) { source in
-                    Text(source.name).tag(source.id)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(width: 178)
+    /// Invites the person to try both keys and confirms each one works.
+    private var tryItChecklist: some View {
+        HStack(spacing: 16) {
+            Text("Try it:")
+                .foregroundStyle(.secondary)
+            checklistItem(.left)
+            checklistItem(.right)
         }
-        .padding(.horizontal, 14)
-        .frame(height: 50)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OnboardingTheme.panel)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(
-                    isHighlighted ? OnboardingTheme.accent : OnboardingTheme.border,
-                    lineWidth: 1
-                )
-        )
-        .animation(.easeOut(duration: 0.18), value: isHighlighted)
-        .accessibilityElement(children: .contain)
-        .accessibilityValue(isHighlighted ? "Tapped" : "")
+        .animation(.easeOut(duration: 0.2), value: shiftTaps.triedSides)
+        // A key counts as tried only with the layout it shows now.
+        .onAppear { shiftTaps.forgetTries() }
+        .onChange(of: model.selectedLeftID) { shiftTaps.forgetTries(on: [.left]) }
+        .onChange(of: model.selectedRightID) { shiftTaps.forgetTries(on: [.right]) }
+    }
+
+    private func checklistItem(_ side: ShiftSide) -> some View {
+        let isDone = shiftTaps.triedSides.contains(side)
+        return Label {
+            Text("Tap \(side.title)")
+        } icon: {
+            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isDone ? Color.green : Color.secondary)
+        }
+        .accessibilityValue(isDone ? "Done" : "Not yet")
     }
 }

@@ -5,27 +5,23 @@ import XCTest
 final class ApplicationPresentationTests: XCTestCase {
     func testMonitoringStateTitles() {
         XCTAssertEqual(StatusMenuState.Monitoring.active.title, "Shift switching is on")
-        XCTAssertEqual(StatusMenuState.Monitoring.active.actionTitle, "Pause")
         XCTAssertEqual(StatusMenuState.Monitoring.paused.title, "Shift switching is paused")
-        XCTAssertEqual(StatusMenuState.Monitoring.paused.actionTitle, "Resume")
         XCTAssertEqual(
             StatusMenuState.Monitoring.permissionRequired.title,
             "Accessibility permission required"
         )
     }
 
-    func testPrivacySettingsOnlyAppearWhenPermissionIsRequired() {
+    func testPermissionItemOnlyAppearsWhenPermissionIsRequired() {
         XCTAssertTrue(
             StatusMenuState(
-                monitoring: .permissionRequired,
-                canCheckForUpdates: false
-            ).showsPrivacySettings
+                monitoring: .permissionRequired
+            ).needsPermission
         )
         XCTAssertFalse(
             StatusMenuState(
-                monitoring: .paused,
-                canCheckForUpdates: false
-            ).showsPrivacySettings
+                monitoring: .paused
+            ).needsPermission
         )
     }
 

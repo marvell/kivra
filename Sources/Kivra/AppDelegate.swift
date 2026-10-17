@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let preferences: AppPreferences
     private let accessibility: AccessibilityClient
     private let inputSources: InputSourceStore
@@ -18,9 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusMenu()
         },
         onShiftTap: { [weak self] side in
-            self?.onboardingController?.shiftTapped(side)
+            self?.shiftTapped(side)
         }
     )
+    private let shiftTaps = ShiftTapFeedback()
     private var statusMenu: StatusMenuController?
     private var onboardingController: OnboardingWindowController?
     private var settingsController: SettingsWindowController?
@@ -61,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.mainMenu = MainMenu.make(applicationName: applicationIdentity.displayName)
         registerInputSourceNotifications()
         preferences.migrateOnboardingCompletionIfNeeded()
 
@@ -115,6 +117,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusMenu()
     }
 
+    @objc func showSettingsFromMenu() {
+        showSettings()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(showSettingsFromMenu) {
+            // Settings become available once setup is finished.
+            return statusMenu != nil
+        }
+        return true
+    }
+
     private func showSettings() {
         if settingsController == nil {
             let model = SettingsModel(
@@ -126,6 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()
                 },
+                onCheckForUpdates: updater.isAvailable
+                    ? { [weak self] in self?.updater.checkForUpdates() } : nil,
                 onConfigurationChange: { [weak self] leftID, rightID, thresholdMilliseconds in
                     self?.applyConfiguration(
                         leftID: leftID,
@@ -136,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             settingsController = SettingsWindowController(
                 model: model,
+                shiftTaps: shiftTaps,
                 onClose: { [weak self] in
                     self?.presentation.end(.settings)
                 }
@@ -154,7 +171,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 configuredRightID: inputSources.configuration.rightSourceID,
                 thresholdMilliseconds: inputSources.configuration.tapThresholdMilliseconds,
                 launchAtLogin: launchAtLogin,
-                inputSourceIndicator: inputSourceIndicator,
                 accessibility: accessibility,
                 onAccessibilityChange: { [weak self] in
                     self?.accessibilityChanged()
@@ -176,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             onboardingController = OnboardingWindowController(
                 model: model,
+                shiftTaps: shiftTaps,
                 onClose: { [weak self] in
                     self?.presentation.end(.onboarding)
                 },
@@ -188,6 +205,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityChanged()
         presentation.begin(.onboarding, activate: true)
         onboardingController?.present()
+    }
+
+    /// Lights up the tapped key only while the person is looking at the keys,
+    /// not while they type in another app.
+    private func shiftTapped(_ side: ShiftSide) {
+        guard
+            onboardingController?.isShowingShiftKeys == true
+                || settingsController?.isShowingShiftKeys == true
+        else {
+            return
+        }
+        shiftTaps.record(side)
     }
 
     private func requestAccessibilityIfNeeded() {
@@ -273,14 +302,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.showSettings()
                 },
                 onOpenPrivacySettings: { [weak self] in
+                    // Only open System Settings: the system prompt would
+                    // appear on top of it and compete for attention.
                     self?.accessibility.openSettings()
                 },
                 onCheckForUpdates: { [weak self] in
                     self?.updater.checkForUpdates()
-                },
-                onShowAbout: {
-                    NSApp.activate(ignoringOtherApps: true)
-                    NSApp.orderFrontStandardAboutPanel(nil)
                 },
                 onQuit: {
                     NSApp.terminate(nil)
@@ -306,10 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu?.update(
             state: StatusMenuState(
                 monitoring: monitoring,
-                canCheckForUpdates: updater.isAvailable,
-                updateAvailability: updater.availability,
-                leftLayoutName: inputSources.configuredSourceName(for: .left),
-                rightLayoutName: inputSources.configuredSourceName(for: .right)
+                updateAvailability: updater.availability
             )
         )
     }

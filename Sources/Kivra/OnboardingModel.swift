@@ -35,36 +35,21 @@ final class OnboardingModel: ObservableObject {
             previewConfiguration()
         }
     }
-    @Published var thresholdMilliseconds: Int {
-        didSet {
-            guard thresholdMilliseconds != oldValue else { return }
-            previewConfiguration()
-        }
-    }
-    /// The Shift key the person just tapped, shown briefly so they can try their layouts.
-    @Published private(set) var highlightedSide: ShiftSide?
+    /// Whether the person has asked for access and is expected in System Settings.
+    @Published private(set) var hasRequestedAccessibility = false
     @Published var isLaunchAtLoginEnabled: Bool
     @Published private(set) var launchAtLoginState: LaunchAtLoginState
     @Published private(set) var launchAtLoginError: String?
-    @Published var hideInputSourceIndicator: Bool {
-        didSet {
-            if hideInputSourceIndicator != oldValue {
-                hasInputSourceIndicatorChanges = true
-            }
-        }
-    }
-    @Published private(set) var inputSourceIndicatorError: String?
 
     @Published private(set) var sources: [InputSource]
+    /// Onboarding keeps the configured tap threshold; Settings changes it.
+    private let thresholdMilliseconds: Int
     private let onAccessibilityChange: () -> Void
     private let onFinish: (String, String, Int) -> Void
     private let onPreview: (String, String, Int) -> Void
     private let accessibility: AccessibilityClient
     private let launchAtLogin: any LaunchAtLoginControlling
-    private let inputSourceIndicator: any InputSourceIndicatorControlling
-    private var hasInputSourceIndicatorChanges = false
     private var permissionTask: Task<Void, Never>?
-    private var highlightTask: Task<Void, Never>?
 
     init(
         sources: [InputSource],
@@ -72,7 +57,6 @@ final class OnboardingModel: ObservableObject {
         configuredRightID: String?,
         thresholdMilliseconds: Int,
         launchAtLogin: any LaunchAtLoginControlling = LaunchAtLoginController(),
-        inputSourceIndicator: any InputSourceIndicatorControlling,
         accessibility: AccessibilityClient = .live,
         onAccessibilityChange: @escaping () -> Void,
         onPreview: @escaping (String, String, Int) -> Void = { _, _, _ in },
@@ -92,8 +76,6 @@ final class OnboardingModel: ObservableObject {
         selectedRightID = selections.right
         self.thresholdMilliseconds = LayoutSelection.normalizedThreshold(thresholdMilliseconds)
         self.launchAtLogin = launchAtLogin
-        self.inputSourceIndicator = inputSourceIndicator
-        hideInputSourceIndicator = inputSourceIndicator.isHidden
         launchAtLoginState = initialLaunchAtLoginState
         isLaunchAtLoginEnabled = true
         step = .welcome
@@ -126,6 +108,16 @@ final class OnboardingModel: ObservableObject {
         return sources.first { $0.id == selectedRightID }?.name ?? "Second layout"
     }
 
+    /// Words typed in each layout's language by the welcome demo.
+    var selectedLeftGreeting: String {
+        greeting(for: selectedLeftID, layoutName: selectedLeftName)
+    }
+
+    var selectedRightGreeting: String {
+        guard selectedRightID != selectedLeftID else { return "…" }
+        return greeting(for: selectedRightID, layoutName: selectedRightName)
+    }
+
     func continueFromWelcome() {
         let isTrusted = accessibility.isGranted()
         updateAccessibility(isTrusted)
@@ -147,6 +139,7 @@ final class OnboardingModel: ObservableObject {
     }
 
     func requestAccessibility() {
+        hasRequestedAccessibility = true
         accessibility.request()
         refreshPermission()
     }
@@ -163,19 +156,6 @@ final class OnboardingModel: ObservableObject {
         // does not replace the layout being swapped in.
         selectedRightID = leftID
         selectedLeftID = rightID
-    }
-
-    func recordShiftTap(_ side: ShiftSide) {
-        highlightTask?.cancel()
-        highlightedSide = side
-        highlightTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(700))
-            } catch {
-                return
-            }
-            self?.highlightedSide = nil
-        }
     }
 
     func startPermissionObservation() {
@@ -208,16 +188,6 @@ final class OnboardingModel: ObservableObject {
             launchAtLoginState = launchAtLogin.state
             launchAtLoginError = "Could not update Open at Login. Try again."
             return
-        }
-        if hasInputSourceIndicatorChanges {
-            do {
-                try inputSourceIndicator.setHidden(hideInputSourceIndicator)
-                hasInputSourceIndicatorChanges = false
-                inputSourceIndicatorError = nil
-            } catch {
-                inputSourceIndicatorError = "Could not update the input source indicator. Try again."
-                return
-            }
         }
         onFinish(selectedLeftID, selectedRightID, thresholdMilliseconds)
     }
@@ -257,6 +227,11 @@ final class OnboardingModel: ObservableObject {
         } else if !currentValue, step == .layouts {
             navigate(to: .permission, direction: .backward)
         }
+    }
+
+    private func greeting(for id: String, layoutName: String) -> String {
+        let source = sources.first { $0.id == id }
+        return Greeting.word(forLanguage: source?.languageCode, layoutName: layoutName)
     }
 
     /// Lets Shift taps use the selected layouts before setup is finished.

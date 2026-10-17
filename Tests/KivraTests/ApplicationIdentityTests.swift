@@ -7,10 +7,12 @@ final class ApplicationIdentityTests: XCTestCase {
         let identity = ApplicationIdentity(infoDictionary: [
             "CFBundleDisplayName": "Kivra",
             "KivraBuildVariant": "stable",
+            "CFBundleShortVersionString": "0.6.0",
         ])
 
         XCTAssertEqual(identity.displayName, "Kivra")
         XCTAssertEqual(identity.variant, .stable)
+        XCTAssertEqual(identity.version, "0.6.0")
         XCTAssertFalse(identity.isDevelopment)
     }
 
@@ -30,5 +32,6 @@ final class ApplicationIdentityTests: XCTestCase {
 
         XCTAssertEqual(identity.displayName, "Kivra")
         XCTAssertEqual(identity.variant, .stable)
+        XCTAssertNil(identity.version)
     }
 }

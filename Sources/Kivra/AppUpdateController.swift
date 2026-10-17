@@ -100,9 +100,7 @@ final class AppUpdateController: NSObject, SPUUpdaterDelegate,
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         Self.allowedChannels(
-            forVersion: Bundle.main.object(
-                forInfoDictionaryKey: "CFBundleShortVersionString"
-            ) as? String
+            forVersion: ApplicationIdentity.current.version
         )
     }
 

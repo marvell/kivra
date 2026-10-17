@@ -25,7 +25,11 @@ final class CarbonInputSourceSystem: InputSourceSystem {
 
         return sourcesByID.reduce(into: [:]) { result, entry in
             let (id, source) = entry
-            result[id] = InputSource(id: id, name: name(for: source) ?? id)
+            result[id] = InputSource(
+                id: id,
+                name: name(for: source) ?? id,
+                languageCode: languageCode(for: source)
+            )
         }
     }
 
@@ -48,6 +52,13 @@ final class CarbonInputSourceSystem: InputSourceSystem {
     private func identifier(for source: TISInputSource) -> String? {
         TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
             .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String }
+    }
+
+    /// macOS lists the layout's primary language first.
+    private func languageCode(for source: TISInputSource) -> String? {
+        TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages)
+            .flatMap { Unmanaged<CFArray>.fromOpaque($0).takeUnretainedValue() as? [String] }?
+            .first
     }
 
     private func name(for source: TISInputSource) -> String? {
