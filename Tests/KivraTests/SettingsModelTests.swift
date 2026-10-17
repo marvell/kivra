@@ -7,12 +7,6 @@ final class SettingsModelTests: XCTestCase {
     private var appliedConfigurations: [AppliedConfiguration] = []
     private var accessibilityChangeCount = 0
 
-    override func setUp() {
-        super.setUp()
-        appliedConfigurations = []
-        accessibilityChangeCount = 0
-    }
-
     func testStartsWithConfiguredValuesWithoutApplyingThem() {
         let model = makeModel(leftID: "a", rightID: "c", threshold: 320)
 
