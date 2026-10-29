@@ -55,7 +55,9 @@ final class InputSourceStoreTests: XCTestCase {
         XCTAssertEqual(system.refreshCallCount, 1)
     }
 
-    func testAlreadySelectedCompletesWithoutSelecting() {
+    func testReportedCurrentSourceIsStillSelected() {
+        // Another process switched away, but this process hasn't processed
+        // the notification yet, so the cached current source is stale.
         let system = FakeInputSourceSystem(
             snapshots: [[InputSource(id: "left", name: "Left")]],
             currentID: "left"
@@ -65,8 +67,24 @@ final class InputSourceStoreTests: XCTestCase {
 
         store.select(for: .left, gate: gate)
 
+        XCTAssertEqual(system.selectedIDs, ["left"])
         XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
-        XCTAssertTrue(system.selectedIDs.isEmpty)
+    }
+
+    func testReportedCurrentSourceCompletesAfterRetry() {
+        let source = InputSource(id: "left", name: "Left")
+        let system = FakeInputSourceSystem(
+            snapshots: [[source], [source]],
+            currentID: "left",
+            selectionResults: [.failed(-1), .selected]
+        )
+        let store = makeStore(leftID: "left", system: system)
+        let gate = SelectionGate()
+
+        store.select(for: .left, gate: gate)
+
+        XCTAssertEqual(system.selectedIDs, ["left", "left"])
+        XCTAssertEqual(gate.wait(timeout: .milliseconds(1)), .completed)
     }
 
     func testFirstFailureRefreshesAndRetriesExactlyOnce() {

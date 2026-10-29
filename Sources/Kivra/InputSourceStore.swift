@@ -57,41 +57,53 @@ final class InputSourceStore {
             return
         }
 
-        if system.currentSourceID() == target.id {
-            gate.finish()
-            return
-        }
-
         guard gate.start() else {
             return
         }
-        pendingSelection = PendingSelection(targetID: target.id, gate: gate)
-
-        var result = system.selectSource(id: target.id)
-        if result == .selected {
-            // The current source can change here before another app is ready to use it.
-            // Keep the event gate closed until the distributed notification arrives.
-            return
+        // Select even when the target is reported current: the report can be
+        // stale. A no-op switch posts no notification, so don't wait for one.
+        let isReportedCurrent = system.currentSourceID() == target.id
+        if !isReportedCurrent {
+            pendingSelection = PendingSelection(targetID: target.id, gate: gate)
         }
 
-        guard gate.isPending else {
-            clearPendingSelection(ifMatching: gate)
+        var result = system.selectSource(id: target.id)
+        if result != .selected {
+            guard let retryResult = retrySelection(for: side, gate: gate) else {
+                clearPendingSelection(ifMatching: gate)
+                return
+            }
+            result = retryResult
+        }
+
+        guard result == .selected else {
+            finishFailedSelection(result, targetID: target.id, gate: gate)
             return
+        }
+        // The current source can change here before another app is ready to use it.
+        // Keep the event gate closed until the distributed notification arrives.
+        guard isReportedCurrent else {
+            return
+        }
+        gate.finish()
+    }
+
+    /// Returns nil when the event deadline passes before the retry.
+    private func retrySelection(for side: ShiftSide, gate: SelectionGate) -> InputSourceSelectionResult? {
+        guard gate.isPending else {
+            return nil
         }
 
         // The enabled-source notification can race with a tap. Rebuild the
         // system snapshot and retry once instead of dropping the user's switch.
         refresh()
         guard gate.isPending else {
-            clearPendingSelection(ifMatching: gate)
-            return
+            return nil
         }
-        if let refreshedTarget = selectionTarget(for: side) {
-            result = system.selectSource(id: refreshedTarget.id)
-        } else {
-            result = .unavailable
+        guard let refreshedTarget = selectionTarget(for: side) else {
+            return .unavailable
         }
-        finishFailedSelection(result, targetID: target.id, gate: gate)
+        return system.selectSource(id: refreshedTarget.id)
     }
 
     func selectedSourceDidChange() {
@@ -148,9 +160,6 @@ final class InputSourceStore {
         targetID: String,
         gate: SelectionGate
     ) {
-        guard result != .selected else {
-            return
-        }
         if case .failed(let status) = result {
             logger.error(
                 "Input source selection failed with status \(status), id: \(targetID, privacy: .public)"
